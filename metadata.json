@@ -1,0 +1,7 @@
+{
+  "name": "Districauchos Finanzas",
+  "description": "Automatización contable para Districauchos y Empaques del Sur. Escanea cuadernos y genera reportes en Excel.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

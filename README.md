@@ -1,11 +1,22 @@
-<div align="center">
+# DISTRICAUCHOS - Gestión Financiera Inteligente 🚀
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+Esta es una aplicación móvil (PWA) diseñada para **Districauchos y Empaques del Sur** en Pasto, Colombia. 
 
-  <h1>Built with AI Studio</h2>
+## ✨ Funcionalidades
+- 📸 **Escaneo con IA:** Lee fotos de cuadernos de contabilidad manual usando Google Gemini.
+- 📊 **Gestión Diaria:** Clasifica automáticamente Ventas (Efectivo/Nequi), Devoluciones y Gastos.
+- 📑 **Reportes en Excel:** Genera un archivo Excel completo con hojas diarias y resumen mensual de utilidad neta.
+- 📱 **Instalable:** Funciona como una App nativa en Android y iPhone.
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+## 🛠️ Tecnologías
+- **React 19** + **Tailwind CSS**
+- **Google Gemini API** (IA para visión)
+- **SheetJS (XLSX)** para la generación de reportes.
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
+## 🚀 Instalación para desarrollo
+1. Clona el repositorio.
+2. Crea un archivo `.env` con tu `API_KEY` de Google Gemini.
+3. Ejecuta `npm install` y luego `npm run dev`.
 
-</div>
+---
+*Desarrollado para optimizar los procesos contables de pequeños negocios.*
