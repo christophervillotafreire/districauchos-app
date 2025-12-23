@@ -5,17 +5,17 @@ import { DayEditor } from './components/DayEditor';
 import { MonthlySummary } from './components/MonthlySummary';
 import { parseNotebookPage } from './services/geminiService';
 import { generateMonthlyReport } from './services/excelService';
-import { AppState, INITIAL_FIXED_EXPENSES, DayData, Transaction, MonthlyFixedExpenses } from './types';
-import { ArrowUpTrayIcon, CalendarIcon } from '@heroicons/react/24/outline';
+import { AppState, INITIAL_FIXED_EXPENSES, DayData, Transaction, MonthlyFixedExpenses, TransactionType } from './types';
+import { ArrowUpTrayIcon, CalendarIcon, BanknotesIcon, ShoppingBagIcon, ScaleIcon, PencilSquareIcon, ArrowUturnLeftIcon } from '@heroicons/react/24/outline';
 
 const App: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [loadingMessage, setLoadingMessage] = useState<string>('');
   const [installPrompt, setInstallPrompt] = useState<any>(null);
+  const [selectedDayNumber, setSelectedDayNumber] = useState<number | null>(new Date().getDate());
   
   const today = new Date();
-  const currentDayNumber = today.getDate();
   
   const [state, setState] = useState<AppState>(() => {
     const saved = localStorage.getItem('districauchos_state');
@@ -24,13 +24,13 @@ const App: React.FC = () => {
       currentMonth: today.getMonth(),
       currentYear: today.getFullYear(),
       days: {},
-      fixedExpenses: INITIAL_FIXED_EXPENSES
+      fixedExpenses: INITIAL_FIXED_EXPENSES,
+      defaultInitialCash: 0
     };
   });
 
   const [editingDay, setEditingDay] = useState<DayData | null>(null);
 
-  // Calcular días del mes actual dinámicamente
   const daysInMonth = new Date(state.currentYear, state.currentMonth + 1, 0).getDate();
   const monthName = new Intl.DateTimeFormat('es-CO', { month: 'long' }).format(new Date(state.currentYear, state.currentMonth)).toUpperCase();
 
@@ -38,221 +38,233 @@ const App: React.FC = () => {
     localStorage.setItem('districauchos_state', JSON.stringify(state));
   }, [state]);
 
-  useEffect(() => {
-    const handler = (e: any) => {
-      e.preventDefault();
-      setInstallPrompt(e);
-    };
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
-  }, []);
+  // Cálculos Mensuales para el Dashboard
+  const monthlyStats = (Object.values(state.days) as DayData[]).reduce(
+    (acc: { sales: number; expenses: number; returns: number; totalBase: number }, day: DayData) => {
+      acc.totalBase += (day.initialCash ?? state.defaultInitialCash);
+      day.transactions.forEach((t: Transaction) => {
+        const amt = Number(t.amount) || 0;
+        if (t.type === TransactionType.CASH_SALE || t.type === TransactionType.NEQUI_SALE) acc.sales += amt;
+        if (t.type === TransactionType.DAILY_EXPENSE) acc.expenses += amt;
+        if (t.type === TransactionType.RETURN) acc.returns += amt;
+      });
+      return acc;
+    },
+    { sales: 0, expenses: 0, returns: 0, totalBase: 0 }
+  );
 
-  const handleInstallClick = async () => {
-    if (!installPrompt) return;
-    installPrompt.prompt();
-    await installPrompt.userChoice;
-    setInstallPrompt(null);
-  };
+  // La "Caja" es lo que debería haber físicamente hoy (si seleccionamos un día) o el acumulado esperado
+  const selectedDayData = selectedDayNumber ? state.days[selectedDayNumber] : null;
+  const dayStats = selectedDayData?.transactions.reduce((acc, t) => {
+    const amt = Number(t.amount) || 0;
+    if (t.type === TransactionType.CASH_SALE || t.type === TransactionType.NEQUI_SALE) acc.sales += amt;
+    else if (t.type === TransactionType.RETURN) acc.returns += amt;
+    else if (t.type === TransactionType.DAILY_EXPENSE) acc.expenses += amt;
+    return acc;
+  }, { sales: 0, returns: 0, expenses: 0 }) || { sales: 0, returns: 0, expenses: 0 };
+
+  const currentDayBase = selectedDayData ? (selectedDayData.initialCash ?? state.defaultInitialCash) : state.defaultInitialCash;
+  const dayNetCaja = currentDayBase + dayStats.sales - dayStats.returns - dayStats.expenses;
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
     setLoading(true);
-    setLoadingMessage('Leyendo archivo...');
-
+    setLoadingMessage('Analizando con IA...');
     try {
       const reader = new FileReader();
       reader.onloadend = async () => {
         try {
           const base64String = (reader.result as string).split(',')[1];
-          const mimeType = file.type;
-
-          setLoadingMessage('Gemini analizando cuaderno...');
-          const result = await parseNotebookPage(base64String, mimeType);
-          
-          if (!result || !result.items) {
-            throw new Error("La IA no pudo leer datos claros de la imagen.");
-          }
-
+          const result = await parseNotebookPage(base64String, file.type);
           const extractedTransactions: Transaction[] = result.items.map((item: any) => ({
             id: Math.random().toString(36).substr(2, 9),
-            description: item.description || 'Sin descripción',
-            amount: Number(item.amount) || 0,
+            description: item.description,
+            amount: Number(item.amount),
             type: item.type
           }));
-
-          const estimatedDay = result.dayEstimate || new Date().getDate();
-
-          const newDayData: DayData = {
-            day: estimatedDay,
-            hasData: true,
-            transactions: extractedTransactions
+          const day = result.dayEstimate || selectedDayNumber || today.getDate();
+          const newDayData: DayData = { 
+            day, 
+            hasData: true, 
+            transactions: extractedTransactions,
+            initialCash: state.days[day]?.initialCash ?? state.defaultInitialCash
           };
-
           setEditingDay(newDayData);
-        } catch (err: any) {
-          alert("Error: " + err.message);
-        } finally {
-          setLoading(false);
-        }
+        } catch (err: any) { alert("Error: " + err.message); } finally { setLoading(false); }
       };
       reader.readAsDataURL(file);
-    } catch (error) {
-      alert("Error al cargar el archivo.");
-      setLoading(false);
-    } finally {
-        if (fileInputRef.current) fileInputRef.current.value = '';
-    }
+    } catch (error) { setLoading(false); }
   };
 
   const saveDayData = (data: DayData) => {
-    setState(prev => ({
-      ...prev,
-      days: { ...prev.days, [data.day]: data }
-    }));
+    setState(prev => ({ ...prev, days: { ...prev.days, [data.day]: data } }));
     setEditingDay(null);
+    setSelectedDayNumber(data.day);
   };
 
-  const handleExpenseChange = (expenses: MonthlyFixedExpenses) => {
-    setState(prev => ({ ...prev, fixedExpenses: expenses }));
-  };
+  const handleExport = () => generateMonthlyReport(state);
 
-  const handleReset = () => {
-    const newState = {
-      currentMonth: new Date().getMonth(),
-      currentYear: new Date().getFullYear(),
-      days: {},
-      fixedExpenses: INITIAL_FIXED_EXPENSES
-    };
-    setState(newState);
-    localStorage.removeItem('districauchos_state');
-  };
-
-  const handleExport = () => {
-    generateMonthlyReport(state);
-  };
-
-  const triggerFileInput = () => {
-    fileInputRef.current?.click();
-  };
-
-  const daysWithData = Object.values(state.days).length;
+  const formatCurrency = (val: number) => 
+    new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(val);
 
   return (
     <div className="min-h-screen pb-32 bg-slate-50">
-      <Header onInstall={installPrompt ? handleInstallClick : undefined} />
-
-      <input 
-        type="file" 
-        ref={fileInputRef} 
-        onChange={handleFileSelect} 
-        accept="image/*,application/pdf" 
-        className="hidden" 
-      />
+      <Header onInstall={installPrompt ? () => installPrompt.prompt() : undefined} />
+      <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept="image/*" className="hidden" />
 
       {loading && (
-        <div className="fixed inset-0 bg-slate-900/90 z-[100] flex flex-col items-center justify-center text-white p-6 text-center">
-          <div className="relative w-20 h-20 mb-6">
-            <div className="absolute inset-0 border-4 border-blue-500/20 rounded-full"></div>
-            <div className="absolute inset-0 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-          </div>
-          <p className="text-xl font-bold tracking-wide">{loadingMessage}</p>
-          <p className="text-blue-400 mt-2 text-sm animate-pulse">Digitalizando Districauchos...</p>
+        <div className="fixed inset-0 bg-slate-900/90 z-[100] flex flex-col items-center justify-center text-white">
+          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+          <p className="font-bold">{loadingMessage}</p>
         </div>
       )}
 
       {editingDay && (
         <DayEditor 
           dayData={editingDay} 
+          defaultBase={state.defaultInitialCash}
           onSave={saveDayData} 
           onCancel={() => setEditingDay(null)} 
         />
       )}
 
-      <main className="container mx-auto max-w-lg p-4 space-y-6">
-        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-          <div className="flex justify-between items-center mb-6">
-            <div>
-              <h2 className="font-black text-slate-800 text-xl flex items-center gap-2">
-                <CalendarIcon className="h-6 w-6 text-blue-600"/>
-                {monthName} {state.currentYear}
-              </h2>
-              <p className="text-[10px] text-slate-400 font-medium uppercase tracking-tighter">Calendario de Ventas Diarias</p>
-            </div>
-            <button 
-              onClick={triggerFileInput}
-              className="bg-blue-600 text-white p-3 rounded-full shadow-lg shadow-blue-200 active:scale-90 transition-transform"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6">
+      <main className="container mx-auto max-w-lg p-4 space-y-4">
+        
+        {/* DASHBOARD MENSUAL - 4 BOXES */}
+        <div className="grid grid-cols-2 gap-2">
+          <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
+             <div className="bg-green-50 p-2 rounded-lg"><BanknotesIcon className="h-4 w-4 text-green-600"/></div>
+             <div>
+               <p className="text-[9px] font-black text-slate-400 uppercase">Ventas</p>
+               <p className="text-sm font-bold text-slate-800 truncate">{formatCurrency(monthlyStats.sales)}</p>
+             </div>
+          </div>
+          <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
+             <div className="bg-orange-50 p-2 rounded-lg"><ArrowUturnLeftIcon className="h-4 w-4 text-orange-600"/></div>
+             <div>
+               <p className="text-[9px] font-black text-slate-400 uppercase">Devolu.</p>
+               <p className="text-sm font-bold text-slate-800 truncate">{formatCurrency(monthlyStats.returns)}</p>
+             </div>
+          </div>
+          <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
+             <div className="bg-red-50 p-2 rounded-lg"><ShoppingBagIcon className="h-4 w-4 text-red-600"/></div>
+             <div>
+               <p className="text-[9px] font-black text-slate-400 uppercase">Gastos</p>
+               <p className="text-sm font-bold text-slate-800 truncate">{formatCurrency(monthlyStats.expenses)}</p>
+             </div>
+          </div>
+          <div className="bg-blue-600 p-3 rounded-2xl shadow-lg shadow-blue-100 flex items-center gap-3">
+             <div className="bg-blue-500/30 p-2 rounded-lg"><ScaleIcon className="h-4 w-4 text-white"/></div>
+             <div>
+               <p className="text-[9px] font-black text-blue-200 uppercase">Utilidad</p>
+               <p className="text-sm font-bold text-white truncate">{formatCurrency(monthlyStats.sales - monthlyStats.returns - monthlyStats.expenses)}</p>
+             </div>
+          </div>
+        </div>
+
+        {/* CALENDARIO */}
+        <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-200">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="font-black text-slate-800 flex items-center gap-2">
+              <CalendarIcon className="h-5 w-5 text-blue-600"/>
+              {monthName} {state.currentYear}
+            </h2>
+            <button onClick={() => fileInputRef.current?.click()} className="bg-blue-600 text-white p-2.5 rounded-full shadow-lg active:scale-90 transition-transform">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z" />
               </svg>
             </button>
           </div>
 
-          {daysWithData === 0 ? (
-            <EmptyState onScan={triggerFileInput} />
-          ) : (
-            <div className="grid grid-cols-4 sm:grid-cols-5 gap-3">
-              {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => {
-                const hasData = !!state.days[day];
-                const isToday = day === currentDayNumber && state.currentMonth === today.getMonth();
-                
-                return (
-                  <button
-                    key={day}
-                    onClick={() => {
-                        if(hasData) {
-                            setEditingDay(state.days[day]);
-                        } else {
-                            setEditingDay({ day, hasData: true, transactions: [] });
-                        }
-                    }}
-                    className={`
-                      aspect-square rounded-xl flex flex-col items-center justify-center border-2 text-sm transition-all relative
-                      ${hasData 
-                        ? 'bg-blue-600 text-white border-blue-500 shadow-md transform scale-105 z-10' 
-                        : isToday
-                          ? 'bg-white text-blue-600 border-blue-400 ring-2 ring-blue-100 ring-offset-2'
-                          : 'bg-white text-slate-400 border-slate-100 hover:border-blue-200'
-                      }
-                    `}
-                  >
-                    <span className={`font-black ${isToday ? 'text-lg' : 'text-base'}`}>{day}</span>
-                    {hasData && <div className="absolute top-1 right-1 w-2 h-2 bg-green-400 rounded-full border border-blue-600 animate-pulse"></div>}
-                    {isToday && !hasData && <span className="text-[8px] font-bold uppercase mt-0.5">Hoy</span>}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          <div className="grid grid-cols-7 gap-1.5">
+            {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => {
+              const hasData = !!state.days[day];
+              const isSelected = selectedDayNumber === day;
+              const isToday = day === today.getDate() && state.currentMonth === today.getMonth();
+              
+              return (
+                <button
+                  key={day}
+                  onClick={() => setSelectedDayNumber(day)}
+                  className={`
+                    aspect-square rounded-xl flex items-center justify-center text-xs font-bold transition-all border-2
+                    ${isSelected ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-transparent'}
+                    ${hasData ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-50 text-slate-400'}
+                    ${isToday && !hasData ? 'ring-2 ring-blue-300 ring-offset-1' : ''}
+                  `}
+                >
+                  {day}
+                </button>
+              );
+            })}
+          </div>
         </div>
+
+        {/* RESUMEN DEL DÍA SELECCIONADO */}
+        {selectedDayNumber && (
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden animate-in slide-in-from-top-4">
+            <div className="bg-slate-900 p-4 flex justify-between items-center text-white">
+              <div className="flex flex-col">
+                <span className="font-black">DÍA {selectedDayNumber}</span>
+                <span className="text-[10px] text-blue-400 font-bold uppercase">Resumen de Caja</span>
+              </div>
+              <button 
+                onClick={() => setEditingDay(selectedDayData || { day: selectedDayNumber, hasData: true, transactions: [], initialCash: state.defaultInitialCash })}
+                className="flex items-center gap-1.5 bg-blue-600 px-3 py-1.5 rounded-full text-[10px] font-black uppercase"
+              >
+                <PencilSquareIcon className="h-3 w-3" />
+                {selectedDayData ? 'Editar' : 'Registrar'}
+              </button>
+            </div>
+            
+            <div className="p-4 grid grid-cols-2 gap-y-4 gap-x-6">
+              <div className="flex flex-col">
+                <p className="text-[10px] text-slate-400 font-bold uppercase">Base de Caja</p>
+                <p className="text-sm font-bold text-slate-600">{formatCurrency(currentDayBase)}</p>
+              </div>
+              <div className="flex flex-col">
+                <p className="text-[10px] text-slate-400 font-bold uppercase">Ventas (+)</p>
+                <p className="text-sm font-bold text-green-600">{formatCurrency(dayStats.sales)}</p>
+              </div>
+              <div className="flex flex-col">
+                <p className="text-[10px] text-slate-400 font-bold uppercase">Devoluciones (-)</p>
+                <p className="text-sm font-bold text-orange-600">{formatCurrency(dayStats.returns)}</p>
+              </div>
+              <div className="flex flex-col">
+                <p className="text-[10px] text-slate-400 font-bold uppercase">Gastos (-)</p>
+                <p className="text-sm font-bold text-red-600">{formatCurrency(dayStats.expenses)}</p>
+              </div>
+              
+              <div className="col-span-2 pt-3 border-t border-slate-100 flex justify-between items-center">
+                <div className="flex flex-col">
+                  <span className="text-[10px] text-blue-600 font-black uppercase tracking-widest">Efectivo en Caja</span>
+                  <span className="text-xs text-slate-400 font-medium">Lo que debe haber físicamente</span>
+                </div>
+                <span className="text-lg font-black text-blue-700">
+                  {formatCurrency(dayNetCaja)}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
 
         <MonthlySummary 
           expenses={state.fixedExpenses} 
-          onChange={handleExpenseChange} 
-          dayCount={daysWithData}
-          onReset={handleReset}
+          defaultBase={state.defaultInitialCash}
+          onChange={(ex) => setState(p => ({...p, fixedExpenses: ex}))} 
+          onBaseChange={(base) => setState(p => ({...p, defaultInitialCash: base}))}
+          dayCount={Object.keys(state.days).length} 
+          onReset={() => setState(p => ({...p, days: {}, fixedExpenses: INITIAL_FIXED_EXPENSES, defaultInitialCash: 0}))} 
         />
       </main>
 
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 pb-safe-bottom shadow-2xl z-40">
-        <div className="container mx-auto max-w-lg flex items-center justify-between gap-4">
-           <div className="flex flex-col">
-             <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Estado</span>
-             <span className="text-sm font-bold text-slate-800">{daysWithData} de {daysInMonth} días</span>
-           </div>
-           <button
-             onClick={handleExport}
-             disabled={daysWithData === 0}
-             className={`
-               flex-1 flex items-center justify-center gap-2 px-6 py-4 rounded-2xl font-black text-white transition-all uppercase tracking-tighter
-               ${daysWithData === 0 ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 shadow-xl shadow-green-100 active:scale-95'}
-             `}
-           >
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 shadow-2xl z-40 pb-safe-bottom">
+        <div className="container mx-auto max-w-lg">
+           <button onClick={handleExport} disabled={Object.keys(state.days).length === 0} className={`w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-black text-white transition-all uppercase ${Object.keys(state.days).length === 0 ? 'bg-slate-200 text-slate-400' : 'bg-green-600 active:scale-95 shadow-xl shadow-green-100'}`}>
              <ArrowUpTrayIcon className="h-5 w-5 stroke-[3]" />
-             Exportar Excel
+             Exportar Excel Contable
            </button>
         </div>
       </div>

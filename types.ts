@@ -16,6 +16,7 @@ export interface DayData {
   day: number; // 1-31
   transactions: Transaction[];
   hasData: boolean;
+  initialCash?: number; // Base de caja del día
 }
 
 export interface MonthlyFixedExpenses {
@@ -30,8 +31,9 @@ export interface MonthlyFixedExpenses {
 export interface AppState {
   currentMonth: number;
   currentYear: number;
-  days: Record<number, DayData>; // Map of day number to data
+  days: Record<number, DayData>;
   fixedExpenses: MonthlyFixedExpenses;
+  defaultInitialCash: number; // Base de caja por defecto para todos los días
 }
 
 export const INITIAL_FIXED_EXPENSES: MonthlyFixedExpenses = {
