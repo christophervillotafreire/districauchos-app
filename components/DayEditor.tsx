@@ -45,9 +45,8 @@ export const DayEditor: React.FC<DayEditorProps> = ({ dayData, defaultBase, onSa
   const returns = transactions.filter(t => t.type === TransactionType.RETURN).reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
   const dailyExpenses = transactions.filter(t => t.type === TransactionType.DAILY_EXPENSE).reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
 
-  const totalIn = cashSales + nequiSales;
-  const totalOut = returns + dailyExpenses;
-  const netCaja = initialCash + cashSales - totalOut; // Dinero físico esperado (excluyendo Nequi de la caja física)
+  const netCaja = initialCash + cashSales - returns - dailyExpenses; // Solo efectivo físico
+  const totalProfit = (cashSales + nequiSales) - returns - dailyExpenses; // Rendimiento total
 
   return (
     <div className="fixed inset-0 bg-slate-50 z-[60] flex flex-col animate-in fade-in duration-200 overflow-hidden">
@@ -57,14 +56,14 @@ export const DayEditor: React.FC<DayEditorProps> = ({ dayData, defaultBase, onSa
           <h2 className="font-bold text-base">Día {dayData.day}</h2>
           <p className="text-[10px] text-blue-400 font-black uppercase tracking-widest">Editor de Registro</p>
         </div>
-        <button onClick={() => onSave({ ...dayData, transactions, initialCash, hasData: true })} className="bg-blue-600 px-4 py-1.5 rounded-lg text-xs font-bold">GUARDAR</button>
+        <button onClick={() => onSave({ ...dayData, transactions, initialCash, hasData: true })} className="bg-blue-600 px-4 py-1.5 rounded-lg text-xs font-bold shadow-lg shadow-blue-900/20">GUARDAR</button>
       </div>
 
       <div className="p-3 bg-white border-b border-slate-200">
         <div className="bg-blue-50 p-3 rounded-2xl border border-blue-100 flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <CurrencyDollarIcon className="h-5 w-5 text-blue-600" />
-            <span className="text-xs font-bold text-blue-900 uppercase">Base de Caja</span>
+            <span className="text-xs font-bold text-blue-900 uppercase">Base de Caja Inicial</span>
           </div>
           <input 
             type="number" 
@@ -82,7 +81,7 @@ export const DayEditor: React.FC<DayEditorProps> = ({ dayData, defaultBase, onSa
           </div>
           <div className="bg-slate-50 p-2 rounded-xl border border-slate-100 flex flex-col items-center">
             <CreditCardIcon className="h-4 w-4 text-purple-600 mb-1" />
-            <span className="text-[8px] font-bold text-slate-400 uppercase">Nequi</span>
+            <span className="text-[8px] font-bold text-slate-400 uppercase">Transfer</span>
             <p className="font-bold text-slate-900 text-[10px]">{formatCurrency(nequiSales)}</p>
           </div>
           <div className="bg-slate-50 p-2 rounded-xl border border-slate-100 flex flex-col items-center">
@@ -99,11 +98,11 @@ export const DayEditor: React.FC<DayEditorProps> = ({ dayData, defaultBase, onSa
       </div>
 
       <div className="flex bg-white border-b border-slate-200">
-        <button onClick={() => setActiveTab('income')} className={`flex-1 py-3 text-xs font-black tracking-widest transition-all ${activeTab === 'income' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-400'}`}>INGRESOS</button>
-        <button onClick={() => setActiveTab('expense')} className={`flex-1 py-3 text-xs font-black tracking-widest transition-all ${activeTab === 'expense' ? 'text-red-600 border-b-2 border-red-600' : 'text-slate-400'}`}>EGRESOS</button>
+        <button onClick={() => setActiveTab('income')} className={`flex-1 py-3 text-xs font-black tracking-widest transition-all ${activeTab === 'income' ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/20' : 'text-slate-400'}`}>INGRESOS</button>
+        <button onClick={() => setActiveTab('expense')} className={`flex-1 py-3 text-xs font-black tracking-widest transition-all ${activeTab === 'expense' ? 'text-red-600 border-b-2 border-red-600 bg-red-50/20' : 'text-slate-400'}`}>EGRESOS</button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-24">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-32 bg-slate-50/50">
         {transactions
           .filter(t => activeTab === 'income' 
             ? (t.type === TransactionType.CASH_SALE || t.type === TransactionType.NEQUI_SALE)
@@ -112,15 +111,15 @@ export const DayEditor: React.FC<DayEditorProps> = ({ dayData, defaultBase, onSa
           .map((t) => (
             <div key={t.id} className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 animate-in slide-in-from-bottom-2">
               <div className="flex gap-2 mb-2">
-                <input type="text" value={t.description} onChange={(e) => updateTransaction(t.id, 'description', e.target.value)} placeholder="Descripción..." className="flex-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none" />
-                <input type="number" value={t.amount || ''} onChange={(e) => updateTransaction(t.id, 'amount', parseFloat(e.target.value) || 0)} placeholder="0" className="w-24 p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-right outline-none" />
+                <input type="text" value={t.description} onChange={(e) => updateTransaction(t.id, 'description', e.target.value)} placeholder="Descripción..." className="flex-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-300" />
+                <input type="number" value={t.amount || ''} onChange={(e) => updateTransaction(t.id, 'amount', parseFloat(e.target.value) || 0)} placeholder="0" className="w-24 p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-right outline-none focus:border-blue-300" />
               </div>
               <div className="flex justify-between items-center">
-                <select value={t.type} onChange={(e) => updateTransaction(t.id, 'type', e.target.value)} className="text-[10px] font-bold bg-slate-100 p-1.5 rounded-lg border-none text-slate-600">
+                <select value={t.type} onChange={(e) => updateTransaction(t.id, 'type', e.target.value)} className="text-[10px] font-bold bg-slate-100 p-1.5 rounded-lg border-none text-slate-600 uppercase">
                   {activeTab === 'income' ? (
                     <>
                       <option value={TransactionType.CASH_SALE}>VENTA EFECTIVO</option>
-                      <option value={TransactionType.NEQUI_SALE}>VENTA NEQUI</option>
+                      <option value={TransactionType.NEQUI_SALE}>VENTA TRANSFERENCIA</option>
                     </>
                   ) : (
                     <>
@@ -133,18 +132,27 @@ export const DayEditor: React.FC<DayEditorProps> = ({ dayData, defaultBase, onSa
               </div>
             </div>
         ))}
-        <button onClick={handleAdd} className="w-full py-6 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-blue-500 bg-white/50">
+        <button onClick={handleAdd} className="w-full py-6 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-blue-500 bg-white/50 transition-colors">
           <PlusIcon className="h-6 w-6" />
           <span className="text-[10px] font-bold uppercase">Añadir Registro Manual</span>
         </button>
       </div>
 
-      <div className="bg-slate-900 p-4 pb-safe-bottom text-white flex justify-between items-center">
-        <div className="flex flex-col">
-          <span className="text-[9px] font-bold text-blue-400 uppercase tracking-widest">Esperado en Local</span>
-          <span className="text-[8px] text-slate-500">(Base + Efectivo - Gastos - Devolu.)</span>
+      <div className="bg-slate-900 p-4 pb-safe-bottom text-white flex flex-col gap-2">
+        <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+          <div className="flex flex-col">
+            <span className="text-[9px] font-bold text-green-400 uppercase tracking-widest">Efectivo Físico Esperado</span>
+            <span className="text-[8px] text-slate-500">(Base + Efectivo - Egresos)</span>
+          </div>
+          <span className="text-xl font-black text-green-400">{formatCurrency(netCaja)}</span>
         </div>
-        <span className="text-xl font-black">{formatCurrency(netCaja)}</span>
+        <div className="flex justify-between items-center opacity-70">
+          <div className="flex flex-col">
+            <span className="text-[9px] font-bold text-blue-300 uppercase tracking-widest">Ganancia Operativa Día</span>
+            <span className="text-[8px] text-slate-500">(Todas las Ventas - Egresos)</span>
+          </div>
+          <span className="text-lg font-bold text-blue-300">{formatCurrency(totalProfit)}</span>
+        </div>
       </div>
     </div>
   );

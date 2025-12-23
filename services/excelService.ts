@@ -24,7 +24,7 @@ export const generateMonthlyReport = (state: AppState) => {
       [],
       [`BASE DE CAJA INICIAL:`, dayBase],
       [],
-      ["Descripción", "Tipo", "Ingreso (+)", "Egreso (-)"]
+      ["Descripción", "Tipo", "Efectivo (+)", "Transferencia (+)", "Egresos (-)"]
     ];
 
     let dayCash = 0;
@@ -35,26 +35,30 @@ export const generateMonthlyReport = (state: AppState) => {
     if (dayData && dayData.transactions) {
       dayData.transactions.forEach(t => {
         const amt = Number(t.amount) || 0;
-        let ingreso = 0;
+        let cashIn = 0;
+        let transferIn = 0;
         let egreso = 0;
 
         switch (t.type) {
-          case TransactionType.CASH_SALE: ingreso = amt; dayCash += amt; break;
-          case TransactionType.NEQUI_SALE: ingreso = amt; dayNequi += amt; break;
+          case TransactionType.CASH_SALE: cashIn = amt; dayCash += amt; break;
+          case TransactionType.NEQUI_SALE: transferIn = amt; dayNequi += amt; break;
           case TransactionType.RETURN: egreso = amt; dayReturns += amt; break;
           case TransactionType.DAILY_EXPENSE: egreso = amt; dayExpense += amt; break;
         }
 
-        wsData.push([t.description || "Varios", t.type, ingreso, egreso]);
+        wsData.push([t.description || "Varios", t.type, cashIn || "", transferIn || "", egreso || ""]);
       });
       totalBaseInMonth += dayBase;
     }
 
     wsData.push([]);
-    wsData.push(["TOTAL VENTAS DÍA", "", (dayCash + dayNequi)]);
-    wsData.push(["TOTAL DEVOLUCIONES", "", "", dayReturns]);
-    wsData.push(["TOTAL GASTOS DÍA", "", "", dayExpense]);
-    wsData.push(["DINERO EN CAJA (BASE + EFECTIVO - GASTOS)", "", "", dayBase + dayCash - dayReturns - dayExpense]);
+    wsData.push(["TOTAL VENTAS EFECTIVO", "", dayCash]);
+    wsData.push(["TOTAL VENTAS NEQUI", "", "", dayNequi]);
+    wsData.push(["TOTAL DEVOLUCIONES", "", "", "", dayReturns]);
+    wsData.push(["TOTAL GASTOS CAJA", "", "", "", dayExpense]);
+    wsData.push([]);
+    wsData.push(["EFECTIVO EN CAJA (DINERO FÍSICO)", "", (dayBase + dayCash - dayReturns - dayExpense)]);
+    wsData.push(["UTILIDAD DEL DÍA (TOTAL)", "", (dayCash + dayNequi - dayReturns - dayExpense)]);
 
     const ws = XLSX.utils.aoa_to_sheet(wsData);
     
@@ -80,32 +84,35 @@ export const generateMonthlyReport = (state: AppState) => {
   const totalFixedExpenses = fE.utilities + fE.payroll + fE.bankLoans + fE.suppliers + fE.rent + fE.others;
   const totalOperatingIncome = (totalSalesCash + totalSalesNequi);
   const netProfit = totalOperatingIncome - totalReturns - totalDailyExpenses - totalFixedExpenses;
+  const cashProfit = totalSalesCash - totalReturns - totalDailyExpenses;
 
   const summaryData = [
     ["RESUMEN MENSUAL - DISTRICAUCHOS Y EMPAQUES DEL SUR"],
     [`Periodo: ${monthName} ${year}`],
     [],
-    ["CONCEPTO", "VALOR (COP)", "NOTA"],
-    ["1. INGRESOS"],
-    ["   Ventas Efectivo", totalSalesCash, ""],
-    ["   Ventas Nequi", totalSalesNequi, ""],
-    ["   TOTAL INGRESOS BRUTOS", totalOperatingIncome, ""],
+    ["CONCEPTO", "VALOR (COP)", "DETALLE"],
+    ["1. INGRESOS POR VENTAS"],
+    ["   (+) Ventas en Efectivo", totalSalesCash, "Recaudado en local"],
+    ["   (+) Ventas por Transferencia", totalSalesNequi, "Consignaciones Nequi/Otros"],
+    ["   TOTAL VENTAS BRUTAS", totalOperatingIncome, ""],
     [],
-    ["2. EGRESOS OPERATIVOS"],
-    ["   (-) Devoluciones", totalReturns, "Garantías y cambios"],
-    ["   (-) Gastos Diarios", totalDailyExpenses, "Gastos de caja menor"],
+    ["2. EGRESOS OPERATIVOS (CAJA)"],
+    ["   (-) Devoluciones / Garantías", totalReturns, ""],
+    ["   (-) Gastos Diarios Menores", totalDailyExpenses, ""],
     [],
-    ["3. GASTOS FIJOS"],
-    ["   Servicios", fE.utilities],
+    ["   (=) GANANCIA EN EFECTIVO", cashProfit, "Flujo de dinero físico del mes"],
+    [],
+    ["3. GASTOS FIJOS DEL MES"],
+    ["   Servicios Públicos", fE.utilities],
     ["   Nómina", fE.payroll],
     ["   Arriendo", fE.rent],
-    ["   Bancos", fE.bankLoans],
+    ["   Obligaciones Bancarias", fE.bankLoans],
     ["   Proveedores", fE.suppliers],
-    ["   Otros", fE.others],
+    ["   Otros Gastos", fE.others],
     ["   TOTAL GASTOS FIJOS", totalFixedExpenses],
     [],
     ["---------------------------", "-------------"],
-    ["UTILIDAD NETA DEL MES", netProfit, "Ganancia real"],
+    ["UTILIDAD NETA FINAL", netProfit, "Resultado neto del ejercicio"],
   ];
 
   const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
