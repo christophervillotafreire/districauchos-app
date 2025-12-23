@@ -14,18 +14,25 @@ const App: React.FC = () => {
   const [loadingMessage, setLoadingMessage] = useState<string>('');
   const [installPrompt, setInstallPrompt] = useState<any>(null);
   
+  const today = new Date();
+  const currentDayNumber = today.getDate();
+  
   const [state, setState] = useState<AppState>(() => {
     const saved = localStorage.getItem('districauchos_state');
     if (saved) return JSON.parse(saved);
     return {
-      currentMonth: new Date().getMonth(),
-      currentYear: new Date().getFullYear(),
+      currentMonth: today.getMonth(),
+      currentYear: today.getFullYear(),
       days: {},
       fixedExpenses: INITIAL_FIXED_EXPENSES
     };
   });
 
   const [editingDay, setEditingDay] = useState<DayData | null>(null);
+
+  // Calcular días del mes actual dinámicamente
+  const daysInMonth = new Date(state.currentYear, state.currentMonth + 1, 0).getDate();
+  const monthName = new Intl.DateTimeFormat('es-CO', { month: 'long' }).format(new Date(state.currentYear, state.currentMonth)).toUpperCase();
 
   useEffect(() => {
     localStorage.setItem('districauchos_state', JSON.stringify(state));
@@ -111,6 +118,17 @@ const App: React.FC = () => {
     setState(prev => ({ ...prev, fixedExpenses: expenses }));
   };
 
+  const handleReset = () => {
+    const newState = {
+      currentMonth: new Date().getMonth(),
+      currentYear: new Date().getFullYear(),
+      days: {},
+      fixedExpenses: INITIAL_FIXED_EXPENSES
+    };
+    setState(newState);
+    localStorage.removeItem('districauchos_state');
+  };
+
   const handleExport = () => {
     generateMonthlyReport(state);
   };
@@ -158,9 +176,9 @@ const App: React.FC = () => {
             <div>
               <h2 className="font-black text-slate-800 text-xl flex items-center gap-2">
                 <CalendarIcon className="h-6 w-6 text-blue-600"/>
-                REGISTRO DIARIO
+                {monthName} {state.currentYear}
               </h2>
-              <p className="text-xs text-slate-400 font-medium uppercase tracking-tighter">Control de Ventas y Gastos</p>
+              <p className="text-[10px] text-slate-400 font-medium uppercase tracking-tighter">Calendario de Ventas Diarias</p>
             </div>
             <button 
               onClick={triggerFileInput}
@@ -177,8 +195,10 @@ const App: React.FC = () => {
             <EmptyState onScan={triggerFileInput} />
           ) : (
             <div className="grid grid-cols-4 sm:grid-cols-5 gap-3">
-              {Array.from({ length: 31 }, (_, i) => i + 1).map(day => {
+              {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => {
                 const hasData = !!state.days[day];
+                const isToday = day === currentDayNumber && state.currentMonth === today.getMonth();
+                
                 return (
                   <button
                     key={day}
@@ -193,12 +213,15 @@ const App: React.FC = () => {
                       aspect-square rounded-xl flex flex-col items-center justify-center border-2 text-sm transition-all relative
                       ${hasData 
                         ? 'bg-blue-600 text-white border-blue-500 shadow-md transform scale-105 z-10' 
-                        : 'bg-white text-slate-400 border-slate-100 hover:border-blue-200'
+                        : isToday
+                          ? 'bg-white text-blue-600 border-blue-400 ring-2 ring-blue-100 ring-offset-2'
+                          : 'bg-white text-slate-400 border-slate-100 hover:border-blue-200'
                       }
                     `}
                   >
-                    <span className="font-black text-base">{day}</span>
+                    <span className={`font-black ${isToday ? 'text-lg' : 'text-base'}`}>{day}</span>
                     {hasData && <div className="absolute top-1 right-1 w-2 h-2 bg-green-400 rounded-full border border-blue-600 animate-pulse"></div>}
+                    {isToday && !hasData && <span className="text-[8px] font-bold uppercase mt-0.5">Hoy</span>}
                   </button>
                 );
               })}
@@ -210,6 +233,7 @@ const App: React.FC = () => {
           expenses={state.fixedExpenses} 
           onChange={handleExpenseChange} 
           dayCount={daysWithData}
+          onReset={handleReset}
         />
       </main>
 
@@ -217,7 +241,7 @@ const App: React.FC = () => {
         <div className="container mx-auto max-w-lg flex items-center justify-between gap-4">
            <div className="flex flex-col">
              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Estado</span>
-             <span className="text-sm font-bold text-slate-800">{daysWithData} días listos</span>
+             <span className="text-sm font-bold text-slate-800">{daysWithData} de {daysInMonth} días</span>
            </div>
            <button
              onClick={handleExport}
