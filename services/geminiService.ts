@@ -1,7 +1,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { TransactionType } from "../types";
 
-// La API_KEY se inyecta desde Vite/Vercel
+// La API_KEY se inyecta desde el entorno
 const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const transactionSchema = {
@@ -33,32 +33,37 @@ const transactionSchema = {
   required: ["items"]
 };
 
-export const parseNotebookPage = async (base64Data: string, mimeType: string) => {
+export interface FileData {
+  inlineData: {
+    mimeType: string;
+    data: string;
+  };
+}
+
+export const parseNotebookPage = async (files: FileData[]) => {
   const ai = getAI();
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: {
         parts: [
+          ...files,
           {
-            inlineData: {
-              mimeType: mimeType,
-              data: base64Data
-            }
-          },
-          {
-            text: `Analiza este registro contable de 'Districauchos y Empaques del Sur'. 
+            text: `Analiza estas fotos de un registro contable de 'Districauchos y Empaques del Sur'. 
+            IMPORTANTE: Pueden ser varias páginas del MISMO DÍA. 
+            - Consolida TODOS los ítems de todas las imágenes en una sola lista.
             - Extrae todas las ventas (Efectivo o Nequi).
             - Extrae gastos (almuerzos, transportes, insumos).
             - Extrae devoluciones.
-            - Si un valor dice '20' o '50' en un contexto de miles, conviértelo a '20000' o '50000'.`
+            - Si un valor dice '20' o '50' en un contexto de miles, conviértelo a '20000' o '50000'.
+            - Identifica el día del mes que se menciona en los encabezados.`
           }
         ]
       },
       config: {
         responseMimeType: "application/json",
         responseSchema: transactionSchema,
-        systemInstruction: "Eres un contador experto que digitaliza cuadernos manuales colombianos con precisión absoluta.",
+        systemInstruction: "Eres un contador experto que digitaliza cuadernos manuales colombianos. Tu tarea es unir la información de múltiples fotos si pertenecen al mismo registro diario.",
       }
     });
 

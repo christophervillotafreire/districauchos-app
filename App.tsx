@@ -1,9 +1,10 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Header } from './components/Header';
 import { EmptyState } from './components/EmptyState';
 import { DayEditor } from './components/DayEditor';
 import { MonthlySummary } from './components/MonthlySummary';
-import { parseNotebookPage } from './services/geminiService';
+import { parseNotebookPage, FileData } from './services/geminiService';
 import { generateMonthlyReport } from './services/excelService';
 import { AppState, INITIAL_FIXED_EXPENSES, DayData, Transaction, MonthlyFixedExpenses, TransactionType } from './types';
 import { ArrowUpTrayIcon, CalendarIcon, BanknotesIcon, ShoppingBagIcon, ScaleIcon, PencilSquareIcon, ArrowUturnLeftIcon } from '@heroicons/react/24/outline';
@@ -38,7 +39,6 @@ const App: React.FC = () => {
     localStorage.setItem('districauchos_state', JSON.stringify(state));
   }, [state]);
 
-  // Cálculos Mensuales para el Dashboard
   const monthlyStats = (Object.values(state.days) as DayData[]).reduce(
     (acc: { sales: number; expenses: number; returns: number; totalBase: number }, day: DayData) => {
       acc.totalBase += (day.initialCash ?? state.defaultInitialCash);
@@ -53,7 +53,6 @@ const App: React.FC = () => {
     { sales: 0, expenses: 0, returns: 0, totalBase: 0 }
   );
 
-  // La "Caja" es lo que debería haber físicamente hoy (si seleccionamos un día) o el acumulado esperado
   const selectedDayData = selectedDayNumber ? state.days[selectedDayNumber] : null;
   const dayStats = selectedDayData?.transactions.reduce((acc, t) => {
     const amt = Number(t.amount) || 0;
@@ -67,34 +66,53 @@ const App: React.FC = () => {
   const dayNetCaja = currentDayBase + dayStats.sales - dayStats.returns - dayStats.expenses;
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
     setLoading(true);
-    setLoadingMessage('Analizando con IA...');
+    setLoadingMessage(files.length > 1 ? `Procesando ${files.length} páginas...` : 'Analizando con IA...');
+
     try {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        try {
-          const base64String = (reader.result as string).split(',')[1];
-          const result = await parseNotebookPage(base64String, file.type);
-          const extractedTransactions: Transaction[] = result.items.map((item: any) => ({
-            id: Math.random().toString(36).substr(2, 9),
-            description: item.description,
-            amount: Number(item.amount),
-            type: item.type
-          }));
-          const day = result.dayEstimate || selectedDayNumber || today.getDate();
-          const newDayData: DayData = { 
-            day, 
-            hasData: true, 
-            transactions: extractedTransactions,
-            initialCash: state.days[day]?.initialCash ?? state.defaultInitialCash
+      // Fix: Added explicit type (file: File) to resolve "Property 'type' does not exist on type 'unknown'" and "Argument of type 'unknown' is not assignable to parameter of type 'Blob'" errors.
+      const filePromises = Array.from(files).map((file: File) => {
+        return new Promise<FileData>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const base64String = (reader.result as string).split(',')[1];
+            resolve({
+              inlineData: {
+                mimeType: file.type,
+                data: base64String
+              }
+            });
           };
-          setEditingDay(newDayData);
-        } catch (err: any) { alert("Error: " + err.message); } finally { setLoading(false); }
+          reader.readAsDataURL(file);
+        });
+      });
+
+      const filesData = await Promise.all(filePromises);
+      const result = await parseNotebookPage(filesData);
+      
+      const extractedTransactions: Transaction[] = result.items.map((item: any) => ({
+        id: Math.random().toString(36).substr(2, 9),
+        description: item.description,
+        amount: Number(item.amount),
+        type: item.type
+      }));
+
+      const day = result.dayEstimate || selectedDayNumber || today.getDate();
+      const newDayData: DayData = { 
+        day, 
+        hasData: true, 
+        transactions: extractedTransactions,
+        initialCash: state.days[day]?.initialCash ?? state.defaultInitialCash
       };
-      reader.readAsDataURL(file);
-    } catch (error) { setLoading(false); }
+      setEditingDay(newDayData);
+    } catch (err: any) { 
+      alert("Error: " + err.message); 
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   const saveDayData = (data: DayData) => {
@@ -111,12 +129,22 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen pb-32 bg-slate-50">
       <Header onInstall={installPrompt ? () => installPrompt.prompt() : undefined} />
-      <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept="image/*" className="hidden" />
+      
+      {/* SE AÑADE ATRIBUTO 'multiple' */}
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        onChange={handleFileSelect} 
+        accept="image/*,application/pdf" 
+        multiple 
+        className="hidden" 
+      />
 
       {loading && (
-        <div className="fixed inset-0 bg-slate-900/90 z-[100] flex flex-col items-center justify-center text-white">
-          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-          <p className="font-bold">{loadingMessage}</p>
+        <div className="fixed inset-0 bg-slate-900/90 z-[100] flex flex-col items-center justify-center text-white p-6 text-center">
+          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-6"></div>
+          <p className="font-black text-xl mb-2">DISTRICAUCHOS</p>
+          <p className="text-blue-400 font-bold uppercase tracking-widest text-sm animate-pulse">{loadingMessage}</p>
         </div>
       )}
 
@@ -131,7 +159,6 @@ const App: React.FC = () => {
 
       <main className="container mx-auto max-w-lg p-4 space-y-4">
         
-        {/* DASHBOARD MENSUAL - 4 BOXES */}
         <div className="grid grid-cols-2 gap-2">
           <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
              <div className="bg-green-50 p-2 rounded-lg"><BanknotesIcon className="h-4 w-4 text-green-600"/></div>
@@ -163,14 +190,13 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        {/* CALENDARIO */}
         <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-200">
           <div className="flex justify-between items-center mb-4">
             <h2 className="font-black text-slate-800 flex items-center gap-2">
               <CalendarIcon className="h-5 w-5 text-blue-600"/>
               {monthName} {state.currentYear}
             </h2>
-            <button onClick={() => fileInputRef.current?.click()} className="bg-blue-600 text-white p-2.5 rounded-full shadow-lg active:scale-90 transition-transform">
+            <button onClick={() => fileInputRef.current?.click()} className="bg-blue-600 text-white p-2.5 rounded-full shadow-lg active:scale-90 transition-transform flex items-center gap-2">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z" />
@@ -202,7 +228,6 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        {/* RESUMEN DEL DÍA SELECCIONADO */}
         {selectedDayNumber && (
           <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden animate-in slide-in-from-top-4">
             <div className="bg-slate-900 p-4 flex justify-between items-center text-white">
