@@ -1,11 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Header } from './components/Header';
-import { EmptyState } from './components/EmptyState';
 import { DayEditor } from './components/DayEditor';
 import { MonthlySummary } from './components/MonthlySummary';
 import { parseNotebookPage, FileData } from './services/geminiService';
 import { generateMonthlyReport } from './services/excelService';
-import { AppState, INITIAL_FIXED_EXPENSES, DayData, Transaction, MonthlyFixedExpenses, TransactionType } from './types';
+import { AppState, INITIAL_FIXED_EXPENSES, DayData, Transaction, TransactionType } from './types';
 import { 
   ArrowUpTrayIcon, 
   CalendarIcon, 
@@ -15,7 +14,7 @@ import {
   CameraIcon, 
   ArrowUturnLeftIcon, 
   CreditCardIcon, 
-  CurrencyDollarIcon 
+  CurrencyDollarIcon
 } from '@heroicons/react/24/outline';
 
 const App: React.FC = () => {
@@ -23,7 +22,8 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [loadingMessage, setLoadingMessage] = useState<string>('');
   const [installPrompt, setInstallPrompt] = useState<any>(null);
-  const [selectedDayNumber, setSelectedDayNumber] = useState<number | null>(new Date().getDate());
+  const [selectedDayNumber, setSelectedDayNumber] = useState<number>(new Date().getDate());
+  const [hasManuallySelected, setHasManuallySelected] = useState<boolean>(false);
   
   const today = new Date();
   
@@ -62,7 +62,7 @@ const App: React.FC = () => {
     { cashSales: 0, nequiSales: 0, expenses: 0, returns: 0 }
   );
 
-  const selectedDayData = selectedDayNumber ? state.days[selectedDayNumber] : null;
+  const selectedDayData = state.days[selectedDayNumber] || null;
   const dayStats = selectedDayData?.transactions.reduce((acc, t) => {
     const amt = Number(t.amount) || 0;
     if (t.type === TransactionType.CASH_SALE) acc.cashSales += amt;
@@ -81,14 +81,15 @@ const App: React.FC = () => {
     if (!files || files.length === 0) return;
 
     setLoading(true);
-    setLoadingMessage(files.length > 1 ? `Procesando ${files.length} páginas...` : 'Analizando con IA...');
+    setLoadingMessage(files.length > 1 ? `Consolidando ${files.length} páginas...` : 'Analizando con IA...');
 
     try {
       const filePromises = Array.from(files).map((file: File) => {
-        return new Promise<FileData>((resolve) => {
+        return new Promise<FileData>((resolve, reject) => {
           const reader = new FileReader();
           reader.onloadend = () => {
-            const base64String = (reader.result as string).split(',')[1];
+            const result = reader.result as string;
+            const base64String = result.split(',')[1];
             resolve({
               inlineData: {
                 mimeType: file.type,
@@ -96,6 +97,7 @@ const App: React.FC = () => {
               }
             });
           };
+          reader.onerror = reject;
           reader.readAsDataURL(file);
         });
       });
@@ -110,15 +112,21 @@ const App: React.FC = () => {
         type: item.type
       }));
 
-      const day = selectedDayNumber || result.dayEstimate || today.getDate();
+      // Si el usuario eligió un día específico manualmente, lo respetamos.
+      // Si está en el día actual (por defecto), confiamos en lo que detecte la IA.
+      const detectedDay = result.dayEstimate;
+      const targetDay = (hasManuallySelected) ? selectedDayNumber : (detectedDay || selectedDayNumber);
       
       const newDayData: DayData = { 
-        day, 
+        day: targetDay, 
         hasData: true, 
         transactions: extractedTransactions,
-        initialCash: state.days[day]?.initialCash ?? state.defaultInitialCash
+        initialCash: state.days[targetDay]?.initialCash ?? state.defaultInitialCash
       };
       setEditingDay(newDayData);
+      setSelectedDayNumber(targetDay);
+      
+      if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (err: any) { 
       alert("Error: " + err.message); 
     } finally { 
@@ -141,7 +149,7 @@ const App: React.FC = () => {
   const monthlyGrossProfit = (monthlyStats.cashSales + monthlyStats.nequiSales) - monthlyStats.returns - monthlyStats.expenses;
 
   return (
-    <div className="min-h-screen pb-40 bg-slate-50">
+    <div className="min-h-screen pb-44 bg-slate-50">
       <Header onInstall={installPrompt ? () => installPrompt.prompt() : undefined} />
       
       <input 
@@ -173,7 +181,6 @@ const App: React.FC = () => {
       <main className="container mx-auto max-w-lg p-4 space-y-4">
         
         <div className="grid grid-cols-2 gap-2">
-          {/* VENTAS EFECTIVO */}
           <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
              <div className="bg-green-50 p-2 rounded-lg"><BanknotesIcon className="h-4 w-4 text-green-600"/></div>
              <div>
@@ -181,7 +188,6 @@ const App: React.FC = () => {
                <p className="text-xs font-bold text-slate-800 truncate">{formatCurrency(monthlyStats.cashSales)}</p>
              </div>
           </div>
-          {/* VENTAS NEQUI */}
           <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
              <div className="bg-purple-50 p-2 rounded-lg"><CreditCardIcon className="h-4 w-4 text-purple-600"/></div>
              <div>
@@ -189,7 +195,6 @@ const App: React.FC = () => {
                <p className="text-xs font-bold text-slate-800 truncate">{formatCurrency(monthlyStats.nequiSales)}</p>
              </div>
           </div>
-          {/* GASTOS */}
           <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
              <div className="bg-red-50 p-2 rounded-lg"><ShoppingBagIcon className="h-4 w-4 text-red-600"/></div>
              <div>
@@ -197,7 +202,6 @@ const App: React.FC = () => {
                <p className="text-xs font-bold text-slate-800 truncate">{formatCurrency(monthlyStats.expenses)}</p>
              </div>
           </div>
-          {/* DEVOLUCIONES */}
           <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
              <div className="bg-orange-50 p-2 rounded-lg"><ArrowUturnLeftIcon className="h-4 w-4 text-orange-600"/></div>
              <div>
@@ -205,7 +209,6 @@ const App: React.FC = () => {
                <p className="text-xs font-bold text-slate-800 truncate">{formatCurrency(monthlyStats.returns)}</p>
              </div>
           </div>
-          {/* GANANCIA EFECTIVO */}
           <div className="bg-emerald-600 p-3 rounded-2xl shadow-lg shadow-emerald-100 flex items-center gap-3 text-white">
              <div className="bg-emerald-500/30 p-2 rounded-lg"><CurrencyDollarIcon className="h-4 w-4 text-white"/></div>
              <div>
@@ -213,7 +216,6 @@ const App: React.FC = () => {
                <p className="text-xs font-black truncate">{formatCurrency(monthlyCashProfit)}</p>
              </div>
           </div>
-          {/* GANANCIA BRUTA */}
           <div className="bg-blue-600 p-3 rounded-2xl shadow-lg shadow-blue-100 flex items-center gap-3 text-white">
              <div className="bg-blue-500/30 p-2 rounded-lg"><ScaleIcon className="h-4 w-4 text-white"/></div>
              <div>
@@ -231,9 +233,9 @@ const App: React.FC = () => {
             </h2>
             <button 
               onClick={() => fileInputRef.current?.click()} 
-              className="bg-blue-600 text-white p-2.5 rounded-full shadow-lg active:scale-90 transition-transform flex items-center justify-center"
+              className="bg-blue-600 text-white p-3 rounded-full shadow-lg active:scale-90 transition-transform flex items-center justify-center"
             >
-              <CameraIcon className="h-5 w-5" />
+              <CameraIcon className="h-6 w-6" />
             </button>
           </div>
 
@@ -246,7 +248,10 @@ const App: React.FC = () => {
               return (
                 <button
                   key={day}
-                  onClick={() => setSelectedDayNumber(day)}
+                  onClick={() => {
+                    setSelectedDayNumber(day);
+                    setHasManuallySelected(true);
+                  }}
                   className={`
                     aspect-square rounded-xl flex items-center justify-center text-xs font-bold transition-all border-2
                     ${isSelected ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-transparent'}
@@ -265,8 +270,8 @@ const App: React.FC = () => {
           <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden animate-in slide-in-from-top-4">
             <div className="bg-slate-900 p-4 flex justify-between items-center text-white">
               <div className="flex flex-col">
-                <span className="font-black text-sm">RESUMEN DÍA {selectedDayNumber}</span>
-                <span className="text-[10px] text-blue-400 font-bold uppercase">Cuadre de Caja</span>
+                <span className="font-black text-sm uppercase">Resumen Día {selectedDayNumber}</span>
+                <span className="text-[10px] text-blue-400 font-bold uppercase">Estado de Caja</span>
               </div>
               <button 
                 onClick={() => setEditingDay(selectedDayData || { day: selectedDayNumber, hasData: true, transactions: [], initialCash: state.defaultInitialCash })}
@@ -279,19 +284,19 @@ const App: React.FC = () => {
             <div className="p-4 space-y-4">
               <div className="grid grid-cols-2 gap-4 border-b border-slate-100 pb-4">
                 <div className="flex flex-col">
-                  <p className="text-[10px] text-slate-400 font-bold uppercase">Ventas Efectivo</p>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase">Efec. Ventas</p>
                   <p className="text-sm font-bold text-slate-800">{formatCurrency(dayStats.cashSales)}</p>
                 </div>
                 <div className="flex flex-col">
-                  <p className="text-[10px] text-slate-400 font-bold uppercase">Ventas Nequi</p>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase">Transferencia</p>
                   <p className="text-sm font-bold text-purple-600">{formatCurrency(dayStats.nequiSales)}</p>
                 </div>
               </div>
 
               <div className="flex justify-between items-center bg-green-50/50 p-3 rounded-2xl border border-green-100">
                 <div className="flex flex-col">
-                  <span className="text-[10px] text-green-700 font-black uppercase tracking-widest">Efectivo Físico</span>
-                  <span className="text-[9px] text-green-600 font-medium">Lo que debe haber en caja</span>
+                  <span className="text-[10px] text-green-700 font-black uppercase tracking-widest">Saldo Físico</span>
+                  <span className="text-[9px] text-green-600 font-medium">Dinero real esperado</span>
                 </div>
                 <span className="text-lg font-black text-green-700">
                   {formatCurrency(dayNetCaja)}
@@ -300,8 +305,8 @@ const App: React.FC = () => {
 
               <div className="flex justify-between items-center bg-blue-50/50 p-3 rounded-2xl border border-blue-100">
                 <div className="flex flex-col">
-                  <span className="text-[10px] text-blue-700 font-black uppercase tracking-widest">Utilidad del Día</span>
-                  <span className="text-[9px] text-blue-600 font-medium">(Efec + Nequi - Gastos)</span>
+                  <span className="text-[10px] text-blue-700 font-black uppercase tracking-widest">Utilidad Día</span>
+                  <span className="text-[9px] text-blue-600 font-medium">Rendimiento total</span>
                 </div>
                 <span className="text-lg font-black text-blue-700">
                   {formatCurrency(dayTotalProfit)}
@@ -310,8 +315,6 @@ const App: React.FC = () => {
             </div>
           </div>
         )}
-
-        {!selectedDayData && !loading && <EmptyState onScan={() => fileInputRef.current?.click()} />}
 
         <MonthlySummary 
           expenses={state.fixedExpenses} 
@@ -323,7 +326,7 @@ const App: React.FC = () => {
         />
       </main>
 
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 shadow-[0_-10px_30px_rgba(0,0,0,0.05)] z-40 pb-safe-bottom">
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 shadow-[0_-10px_30px_rgba(0,0,0,0.08)] z-40 pb-safe-bottom">
         <div className="container mx-auto max-w-lg">
            <button onClick={handleExport} disabled={Object.keys(state.days).length === 0} className={`w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-black text-white transition-all uppercase text-xs tracking-widest ${Object.keys(state.days).length === 0 ? 'bg-slate-200 text-slate-400' : 'bg-slate-900 active:scale-95 shadow-xl shadow-slate-200'}`}>
              <ArrowUpTrayIcon className="h-5 w-5 stroke-[3]" />

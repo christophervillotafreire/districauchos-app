@@ -50,20 +50,24 @@ export const parseNotebookPage = async (files: FileData[]) => {
           ...files,
           {
             text: `Analiza estas fotos de un registro contable de 'Districauchos y Empaques del Sur'. 
-            IMPORTANTE: Pueden ser varias páginas del MISMO DÍA. 
-            - Consolida TODOS los ítems de todas las imágenes en una sola lista.
-            - Extrae todas las ventas (Efectivo o Nequi).
-            - Extrae gastos (almuerzos, transportes, insumos).
-            - Extrae devoluciones.
-            - Si un valor dice '20' o '50' en un contexto de miles, conviértelo a '20000' o '50000'.
-            - Identifica el día del mes que se menciona en los encabezados.`
+            IMPORTANTE: Has recibido ${files.length} imágenes. Pueden ser varias páginas o fotos del MISMO DÍA. 
+            
+            - Debes leer CADA UNA de las imágenes proporcionadas.
+            - Consolida TODOS los ítems de todas las imágenes en una sola lista final. No omitas nada.
+            - Clasifica cada ítem:
+              * Venta Efectivo: Dinero físico recibido.
+              * Venta Nequi: Pagos por transferencia.
+              * Gasto Diario: Egresos (compras, comida, aseo).
+              * Devolución: Dinero devuelto al cliente.
+            - Si un valor dice '20' en columna de miles, interpreta como 20000.
+            - Si encuentras un encabezado de fecha, extrae el número del día.`
           }
         ]
       },
       config: {
         responseMimeType: "application/json",
         responseSchema: transactionSchema,
-        systemInstruction: "Eres un contador experto que digitaliza cuadernos manuales colombianos. Tu tarea es unir la información de múltiples fotos si pertenecen al mismo registro diario.",
+        systemInstruction: "Eres un contador experto que digitaliza cuadernos manuales. Tu prioridad es la precisión y no omitir ninguna línea de las múltiples fotos que se te envían. Une todo el contenido en un solo objeto JSON.",
       }
     });
 
