@@ -24,12 +24,48 @@ const App: React.FC = () => {
   const [installPrompt, setInstallPrompt] = useState<any>(null);
   const [selectedDayNumber, setSelectedDayNumber] = useState<number>(new Date().getDate());
   const [hasManuallySelected, setHasManuallySelected] = useState<boolean>(false);
-  
+
   const today = new Date();
-  
+
+  // --- ESTADO CON MIGRACIÓN DE DATOS ---
   const [state, setState] = useState<AppState>(() => {
     const saved = localStorage.getItem('districauchos_state');
-    if (saved) return JSON.parse(saved);
+    if (saved) {
+      try {
+        const parsedState = JSON.parse(saved);
+        
+        // MIGRACIÓN: Verificar si payroll es un número (formato viejo)
+        if (typeof parsedState.fixedExpenses?.payroll === 'number') {
+          console.log("Migrando formato de nómina...");
+          const oldAmount = parsedState.fixedExpenses.payroll;
+          parsedState.fixedExpenses.payroll = oldAmount > 0 ? [{
+            id: 'legacy_migration',
+            name: 'Nómina General (Migrado)',
+            paymentQ1: oldAmount,
+            paymentQ2: 0
+          }] : [];
+        }
+
+        // Asegurar que payroll sea un array si está undefined/null
+        if (!Array.isArray(parsedState.fixedExpenses?.payroll)) {
+            parsedState.fixedExpenses = {
+                ...parsedState.fixedExpenses,
+                payroll: []
+            };
+        }
+
+        return parsedState;
+      } catch (e) {
+        console.error("Error cargando estado, reiniciando", e);
+        return {
+          currentMonth: today.getMonth(),
+          currentYear: today.getFullYear(),
+          days: {},
+          fixedExpenses: INITIAL_FIXED_EXPENSES,
+          defaultInitialCash: 0
+        };
+      }
+    }
     return {
       currentMonth: today.getMonth(),
       currentYear: today.getFullYear(),
@@ -104,7 +140,7 @@ const App: React.FC = () => {
 
       const filesData = await Promise.all(filePromises);
       const result = await parseNotebookPage(filesData);
-      
+
       const extractedTransactions: Transaction[] = result.items.map((item: any) => ({
         id: Math.random().toString(36).substr(2, 9),
         description: item.description,
@@ -116,7 +152,7 @@ const App: React.FC = () => {
       // Si está en el día actual (por defecto), confiamos en lo que detecte la IA.
       const detectedDay = result.dayEstimate;
       const targetDay = (hasManuallySelected) ? selectedDayNumber : (detectedDay || selectedDayNumber);
-      
+
       const newDayData: DayData = { 
         day: targetDay, 
         hasData: true, 
@@ -125,7 +161,7 @@ const App: React.FC = () => {
       };
       setEditingDay(newDayData);
       setSelectedDayNumber(targetDay);
-      
+
       if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (err: any) { 
       alert("Error: " + err.message); 
@@ -151,7 +187,7 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen pb-44 bg-slate-50">
       <Header onInstall={installPrompt ? () => installPrompt.prompt() : undefined} />
-      
+
       <input 
         type="file" 
         ref={fileInputRef} 
@@ -179,7 +215,7 @@ const App: React.FC = () => {
       )}
 
       <main className="container mx-auto max-w-lg p-4 space-y-4">
-        
+
         <div className="grid grid-cols-2 gap-2">
           <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
              <div className="bg-green-50 p-2 rounded-lg"><BanknotesIcon className="h-4 w-4 text-green-600"/></div>
@@ -244,7 +280,7 @@ const App: React.FC = () => {
               const hasData = !!state.days[day];
               const isSelected = selectedDayNumber === day;
               const isToday = day === today.getDate() && state.currentMonth === today.getMonth();
-              
+
               return (
                 <button
                   key={day}
@@ -280,7 +316,7 @@ const App: React.FC = () => {
                 {selectedDayData ? 'Editar' : 'Registrar'}
               </button>
             </div>
-            
+
             <div className="p-4 space-y-4">
               <div className="grid grid-cols-2 gap-4 border-b border-slate-100 pb-4">
                 <div className="flex flex-col">
