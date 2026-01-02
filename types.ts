@@ -1,3 +1,5 @@
+// types.ts
+
 export enum TransactionType {
   CASH_SALE = 'Venta Efectivo',
   NEQUI_SALE = 'Venta Nequi',
@@ -19,9 +21,17 @@ export interface DayData {
   initialCash?: number; // Base de caja del día
 }
 
+// NUEVA INTERFAZ: Estructura para cada empleado
+export interface Employee {
+  id: string;
+  name: string;
+  paymentQ1: number; // Pago Quincena 1
+  paymentQ2: number; // Pago Quincena 2
+}
+
 export interface MonthlyFixedExpenses {
   utilities: number;
-  payroll: number;
+  payroll: Employee[]; // CAMBIO: Ahora es una lista de empleados, no un número
   bankLoans: number;
   suppliers: number;
   rent: number;
@@ -33,12 +43,12 @@ export interface AppState {
   currentYear: number;
   days: Record<number, DayData>;
   fixedExpenses: MonthlyFixedExpenses;
-  defaultInitialCash: number; // Base de caja por defecto para todos los días
+  defaultInitialCash: number;
 }
 
 export const INITIAL_FIXED_EXPENSES: MonthlyFixedExpenses = {
   utilities: 0,
-  payroll: 0,
+  payroll: [], // CAMBIO: Inicializa como array vacío
   bankLoans: 0,
   suppliers: 0,
   rent: 0,
