@@ -12,12 +12,12 @@ export const generateMonthlyReport = (state: AppState) => {
   let totalDailyExpenses = 0;
   let totalBaseInMonth = 0;
 
-  // --- 1. Generar Hojas Diarias ---
+  // --- 1. Generar Hojas Diarias (Igual que antes) ---
   const daysInMonth = new Date(state.currentYear, state.currentMonth + 1, 0).getDate();
   for (let i = 1; i <= daysInMonth; i++) {
     const dayData = state.days[i];
     const dayBase = dayData?.initialCash ?? state.defaultInitialCash;
-    
+
     const wsData: (string | number)[][] = [
       [`DISTRICAUCHOS Y EMPAQUES DEL SUR`],
       [`Fecha: ${i} de ${monthName} de ${year}`],
@@ -61,7 +61,7 @@ export const generateMonthlyReport = (state: AppState) => {
     wsData.push(["UTILIDAD DEL DÍA (TOTAL)", "", (dayCash + dayNequi - dayReturns - dayExpense)]);
 
     const ws = XLSX.utils.aoa_to_sheet(wsData);
-    
+
     totalSalesCash += dayCash;
     totalSalesNequi += dayNequi;
     totalReturns += dayReturns;
@@ -70,11 +70,33 @@ export const generateMonthlyReport = (state: AppState) => {
     XLSX.utils.book_append_sheet(wb, ws, `Día ${i}`);
   }
 
-  // --- 2. Hoja de Resumen Mensual ---
+  // --- 2. Hoja de Resumen Mensual (ACTUALIZADA) ---
   const { fixedExpenses } = state;
+
+  // Lógica para calcular nómina detallada
+  let totalPayroll = 0;
+  const payrollRows: (string | number)[][] = [];
+
+  if (Array.isArray(fixedExpenses.payroll)) {
+    fixedExpenses.payroll.forEach(emp => {
+      const p1 = Number(emp.paymentQ1) || 0;
+      const p2 = Number(emp.paymentQ2) || 0;
+      const subtotal = p1 + p2;
+      totalPayroll += subtotal;
+
+      // Agregamos una fila por empleado para el Excel
+      if (subtotal > 0 || emp.name) {
+        payrollRows.push([`      ↳ ${emp.name}`, subtotal, `Q1: $${p1} / Q2: $${p2}`]);
+      }
+    });
+  } else {
+    // Fallback por si acaso llega un número antiguo
+    totalPayroll = Number(fixedExpenses.payroll) || 0;
+  }
+
   const fE = {
     utilities: Number(fixedExpenses.utilities) || 0,
-    payroll: Number(fixedExpenses.payroll) || 0,
+    payroll: totalPayroll, // Usamos el total calculado arriba
     bankLoans: Number(fixedExpenses.bankLoans) || 0,
     suppliers: Number(fixedExpenses.suppliers) || 0,
     rent: Number(fixedExpenses.rent) || 0,
@@ -86,7 +108,8 @@ export const generateMonthlyReport = (state: AppState) => {
   const netProfit = totalOperatingIncome - totalReturns - totalDailyExpenses - totalFixedExpenses;
   const cashProfit = totalSalesCash - totalReturns - totalDailyExpenses;
 
-  const summaryData = [
+  // Construcción dinámica de la tabla de resumen
+  const summaryData: (string | number)[][] = [
     ["RESUMEN MENSUAL - DISTRICAUCHOS Y EMPAQUES DEL SUR"],
     [`Periodo: ${monthName} ${year}`],
     [],
@@ -104,16 +127,24 @@ export const generateMonthlyReport = (state: AppState) => {
     [],
     ["3. GASTOS FIJOS DEL MES"],
     ["   Servicios Públicos", fE.utilities],
-    ["   Nómina", fE.payroll],
     ["   Arriendo", fE.rent],
     ["   Obligaciones Bancarias", fE.bankLoans],
     ["   Proveedores", fE.suppliers],
     ["   Otros Gastos", fE.others],
+    ["   --- NÓMINA (Detalle abajo) ---", fE.payroll], // Cabecera de nómina
+  ];
+
+  // Insertamos las filas de los empleados debajo de la cabecera de nómina
+  payrollRows.forEach(row => summaryData.push(row));
+
+  // Continuamos con el resto del reporte
+  summaryData.push(
+    [],
     ["   TOTAL GASTOS FIJOS", totalFixedExpenses],
     [],
     ["---------------------------", "-------------"],
     ["UTILIDAD NETA FINAL", netProfit, "Resultado neto del ejercicio"],
-  ];
+  );
 
   const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
   XLSX.utils.book_append_sheet(wb, wsSummary, "RESUMEN FINAL");
