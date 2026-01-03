@@ -21,17 +21,24 @@ export interface DayData {
   initialCash?: number; // Base de caja del día
 }
 
-// NUEVA INTERFAZ: Estructura para cada empleado
+// Interfaz para Empleados (Nómina)
 export interface Employee {
   id: string;
   name: string;
-  paymentQ1: number; // Pago Quincena 1
-  paymentQ2: number; // Pago Quincena 2
+  paymentQ1: number;
+  paymentQ2: number;
+}
+
+// NUEVA INTERFAZ: Para Servicios Públicos
+export interface ServiceItem {
+  id: string;
+  name: string;
+  amount: number;
 }
 
 export interface MonthlyFixedExpenses {
-  utilities: number;
-  payroll: Employee[]; // CAMBIO: Ahora es una lista de empleados, no un número
+  utilities: ServiceItem[]; // CAMBIO: Ahora es una lista
+  payroll: Employee[];
   bankLoans: number;
   suppliers: number;
   rent: number;
@@ -47,8 +54,8 @@ export interface AppState {
 }
 
 export const INITIAL_FIXED_EXPENSES: MonthlyFixedExpenses = {
-  utilities: 0,
-  payroll: [], // CAMBIO: Inicializa como array vacío
+  utilities: [], // Inicializa como array vacío
+  payroll: [],
   bankLoans: 0,
   suppliers: 0,
   rent: 0,
