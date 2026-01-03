@@ -12,7 +12,7 @@ export const generateMonthlyReport = (state: AppState) => {
   let totalDailyExpenses = 0;
   let totalBaseInMonth = 0;
 
-  // --- 1. Generar Hojas Diarias (Igual que antes) ---
+  // --- 1. Generar Hojas Diarias (Sin Cambios) ---
   const daysInMonth = new Date(state.currentYear, state.currentMonth + 1, 0).getDate();
   for (let i = 1; i <= daysInMonth; i++) {
     const dayData = state.days[i];
@@ -70,33 +70,38 @@ export const generateMonthlyReport = (state: AppState) => {
     XLSX.utils.book_append_sheet(wb, ws, `Día ${i}`);
   }
 
-  // --- 2. Hoja de Resumen Mensual (ACTUALIZADA) ---
+  // --- 2. Hoja de Resumen Mensual ---
   const { fixedExpenses } = state;
 
-  // Lógica para calcular nómina detallada
+  // A. CALCULO NÓMINA (Array)
   let totalPayroll = 0;
   const payrollRows: (string | number)[][] = [];
-
   if (Array.isArray(fixedExpenses.payroll)) {
     fixedExpenses.payroll.forEach(emp => {
-      const p1 = Number(emp.paymentQ1) || 0;
-      const p2 = Number(emp.paymentQ2) || 0;
-      const subtotal = p1 + p2;
-      totalPayroll += subtotal;
-
-      // Agregamos una fila por empleado para el Excel
-      if (subtotal > 0 || emp.name) {
-        payrollRows.push([`      ↳ ${emp.name}`, subtotal, `Q1: $${p1} / Q2: $${p2}`]);
-      }
+      const val = (Number(emp.paymentQ1)||0) + (Number(emp.paymentQ2)||0);
+      totalPayroll += val;
+      if (val > 0) payrollRows.push([`      ↳ Empleado: ${emp.name}`, val, "Pago de Nómina"]);
     });
   } else {
-    // Fallback por si acaso llega un número antiguo
     totalPayroll = Number(fixedExpenses.payroll) || 0;
   }
 
+  // B. CALCULO SERVICIOS (Array) - NUEVO
+  let totalUtilities = 0;
+  const utilityRows: (string | number)[][] = [];
+  if (Array.isArray(fixedExpenses.utilities)) {
+    fixedExpenses.utilities.forEach(item => {
+      const val = Number(item.amount) || 0;
+      totalUtilities += val;
+      if (val > 0) utilityRows.push([`      ↳ Servicio: ${item.name}`, val, "Servicios Públicos"]);
+    });
+  } else {
+    totalUtilities = Number(fixedExpenses.utilities) || 0;
+  }
+
   const fE = {
-    utilities: Number(fixedExpenses.utilities) || 0,
-    payroll: totalPayroll, // Usamos el total calculado arriba
+    utilities: totalUtilities, // Total Calculado
+    payroll: totalPayroll,     // Total Calculado
     bankLoans: Number(fixedExpenses.bankLoans) || 0,
     suppliers: Number(fixedExpenses.suppliers) || 0,
     rent: Number(fixedExpenses.rent) || 0,
@@ -108,7 +113,7 @@ export const generateMonthlyReport = (state: AppState) => {
   const netProfit = totalOperatingIncome - totalReturns - totalDailyExpenses - totalFixedExpenses;
   const cashProfit = totalSalesCash - totalReturns - totalDailyExpenses;
 
-  // Construcción dinámica de la tabla de resumen
+  // CONSTRUCCIÓN TABLA RESUMEN
   const summaryData: (string | number)[][] = [
     ["RESUMEN MENSUAL - DISTRICAUCHOS Y EMPAQUES DEL SUR"],
     [`Periodo: ${monthName} ${year}`],
@@ -126,19 +131,21 @@ export const generateMonthlyReport = (state: AppState) => {
     ["   (=) GANANCIA EN EFECTIVO", cashProfit, "Flujo de dinero físico del mes"],
     [],
     ["3. GASTOS FIJOS DEL MES"],
-    ["   Servicios Públicos", fE.utilities],
+    // Servicios
+    ["   --- SERVICIOS PÚBLICOS ---", fE.utilities],
+  ];
+  utilityRows.forEach(r => summaryData.push(r));
+
+  // Nómina
+  summaryData.push(["   --- NÓMINA ---", fE.payroll]);
+  payrollRows.forEach(r => summaryData.push(r));
+
+  // Resto de gastos
+  summaryData.push(
     ["   Arriendo", fE.rent],
     ["   Obligaciones Bancarias", fE.bankLoans],
     ["   Proveedores", fE.suppliers],
     ["   Otros Gastos", fE.others],
-    ["   --- NÓMINA (Detalle abajo) ---", fE.payroll], // Cabecera de nómina
-  ];
-
-  // Insertamos las filas de los empleados debajo de la cabecera de nómina
-  payrollRows.forEach(row => summaryData.push(row));
-
-  // Continuamos con el resto del reporte
-  summaryData.push(
     [],
     ["   TOTAL GASTOS FIJOS", totalFixedExpenses],
     [],
