@@ -1,6 +1,6 @@
 import React from 'react';
-import { MonthlyFixedExpenses, Employee } from '../types';
-import { TrashIcon, ExclamationTriangleIcon, CurrencyDollarIcon, UserGroupIcon, PlusIcon } from '@heroicons/react/24/outline';
+import { MonthlyFixedExpenses, Employee, ServiceItem } from '../types';
+import { TrashIcon, ExclamationTriangleIcon, CurrencyDollarIcon, UserGroupIcon, PlusIcon, BoltIcon } from '@heroicons/react/24/outline';
 
 interface MonthlySummaryProps {
   expenses: MonthlyFixedExpenses;
@@ -13,57 +13,11 @@ interface MonthlySummaryProps {
 
 export const MonthlySummary: React.FC<MonthlySummaryProps> = ({ expenses, defaultBase, onChange, onBaseChange, dayCount, onReset }) => {
   
-  // Actualizar campos simples (Arriendo, Servicios, etc.)
+  // --- HELPERS ---
   const updateSimpleField = (field: keyof MonthlyFixedExpenses, value: string) => {
-    if (field === 'payroll') return; // La nómina se maneja aparte
+    // Excluimos payroll y utilities que tienen su propia lógica
+    if (field === 'payroll' || field === 'utilities') return;
     onChange({ ...expenses, [field]: parseFloat(value) || 0 });
-  };
-
-  // --- LÓGICA DE EMPLEADOS ---
-
-  const addEmployee = () => {
-    const newEmployee: Employee = {
-      id: Date.now().toString(), // ID temporal simple
-      name: '',
-      paymentQ1: 0,
-      paymentQ2: 0
-    };
-    
-    // Aseguramos que payroll sea un array (por si viene null o undefined de versiones viejas)
-    const currentPayroll = Array.isArray(expenses.payroll) ? expenses.payroll : [];
-    
-    onChange({
-      ...expenses,
-      payroll: [...currentPayroll, newEmployee]
-    });
-  };
-
-  const updateEmployee = (id: string, field: keyof Employee, value: string | number) => {
-    const currentPayroll = Array.isArray(expenses.payroll) ? expenses.payroll : [];
-    
-    const updatedPayroll = currentPayroll.map(emp => {
-      if (emp.id === id) {
-        return { ...emp, [field]: value };
-      }
-      return emp;
-    });
-
-    onChange({ ...expenses, payroll: updatedPayroll });
-  };
-
-  const removeEmployee = (id: string) => {
-    if (window.confirm('¿Eliminar este empleado?')) {
-      const currentPayroll = Array.isArray(expenses.payroll) ? expenses.payroll : [];
-      onChange({
-        ...expenses,
-        payroll: currentPayroll.filter(emp => emp.id !== id)
-      });
-    }
-  };
-
-  const calculateTotalPayroll = () => {
-    if (!Array.isArray(expenses.payroll)) return 0;
-    return expenses.payroll.reduce((total, emp) => total + (Number(emp.paymentQ1) || 0) + (Number(emp.paymentQ2) || 0), 0);
   };
 
   const confirmReset = () => {
@@ -72,9 +26,58 @@ export const MonthlySummary: React.FC<MonthlySummaryProps> = ({ expenses, defaul
     }
   };
 
-  // Campos simples excluyendo 'payroll'
+  // --- LÓGICA DE NÓMINA ---
+  const addEmployee = () => {
+    const newEmployee: Employee = { id: Date.now().toString(), name: '', paymentQ1: 0, paymentQ2: 0 };
+    const currentList = Array.isArray(expenses.payroll) ? expenses.payroll : [];
+    onChange({ ...expenses, payroll: [...currentList, newEmployee] });
+  };
+
+  const updateEmployee = (id: string, field: keyof Employee, value: string | number) => {
+    const currentList = Array.isArray(expenses.payroll) ? expenses.payroll : [];
+    const updated = currentList.map(item => item.id === id ? { ...item, [field]: value } : item);
+    onChange({ ...expenses, payroll: updated });
+  };
+
+  const removeEmployee = (id: string) => {
+    if (window.confirm('¿Eliminar este empleado?')) {
+      const currentList = Array.isArray(expenses.payroll) ? expenses.payroll : [];
+      onChange({ ...expenses, payroll: currentList.filter(item => item.id !== id) });
+    }
+  };
+
+  const calculateTotalPayroll = () => {
+    if (!Array.isArray(expenses.payroll)) return 0;
+    return expenses.payroll.reduce((acc, emp) => acc + (Number(emp.paymentQ1)||0) + (Number(emp.paymentQ2)||0), 0);
+  };
+
+  // --- LÓGICA DE SERVICIOS PÚBLICOS (NUEVO) ---
+  const addService = () => {
+    const newService: ServiceItem = { id: Date.now().toString(), name: '', amount: 0 };
+    const currentList = Array.isArray(expenses.utilities) ? expenses.utilities : [];
+    onChange({ ...expenses, utilities: [...currentList, newService] });
+  };
+
+  const updateService = (id: string, field: keyof ServiceItem, value: string | number) => {
+    const currentList = Array.isArray(expenses.utilities) ? expenses.utilities : [];
+    const updated = currentList.map(item => item.id === id ? { ...item, [field]: value } : item);
+    onChange({ ...expenses, utilities: updated });
+  };
+
+  const removeService = (id: string) => {
+    if (window.confirm('¿Eliminar este servicio?')) {
+      const currentList = Array.isArray(expenses.utilities) ? expenses.utilities : [];
+      onChange({ ...expenses, utilities: currentList.filter(item => item.id !== id) });
+    }
+  };
+
+  const calculateTotalUtilities = () => {
+    if (!Array.isArray(expenses.utilities)) return 0;
+    return expenses.utilities.reduce((acc, item) => acc + (Number(item.amount) || 0), 0);
+  };
+
+  // Campos restantes simples
   const simpleFields = [
-    { label: 'Servicios', key: 'utilities' },
     { label: 'Arriendo', key: 'rent' },
     { label: 'Bancos', key: 'bankLoans' },
     { label: 'Proveedores', key: 'suppliers' },
@@ -95,7 +98,7 @@ export const MonthlySummary: React.FC<MonthlySummaryProps> = ({ expenses, defaul
         <div className="p-4 space-y-6">
           {/* BASE DE CAJA */}
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-            <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-tighter">Base de Caja Diaria Predeterminada:</label>
+            <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-tighter">Base de Caja Diaria:</label>
             <div className="relative">
               <span className="absolute left-3 top-2.5 font-bold text-slate-400">$</span>
               <input
@@ -106,12 +109,64 @@ export const MonthlySummary: React.FC<MonthlySummaryProps> = ({ expenses, defaul
                 placeholder="Ej: 100000"
               />
             </div>
-            <p className="text-[9px] text-slate-400 mt-2 italic">* Este valor se usará automáticamente en cada día nuevo.</p>
           </div>
 
           <div className="border-t border-slate-100 my-4"></div>
 
-          {/* SECCIÓN DE NÓMINA (EMPLEADOS) */}
+          {/* SECCIÓN DE SERVICIOS PÚBLICOS (NUEVO) */}
+          <div className="bg-cyan-50 p-4 rounded-xl border border-cyan-100 space-y-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <h4 className="text-xs font-black text-cyan-900 uppercase flex items-center gap-2">
+                  <BoltIcon className="h-4 w-4" />
+                  Servicios Públicos
+                </h4>
+                <p className="text-[10px] text-cyan-600 font-bold mt-1">
+                  Total: ${calculateTotalUtilities().toLocaleString()}
+                </p>
+              </div>
+              <button onClick={addService} className="bg-cyan-600 text-white p-2 rounded-lg hover:bg-cyan-700 transition-colors shadow-sm">
+                <PlusIcon className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {Array.isArray(expenses.utilities) && expenses.utilities.map((item) => (
+                <div key={item.id} className="bg-white p-2 rounded-lg border border-cyan-100 shadow-sm flex items-center gap-2 group relative">
+                   <div className="flex-1">
+                      <input 
+                        type="text"
+                        value={item.name}
+                        onChange={(e) => updateService(item.id, 'name', e.target.value)}
+                        placeholder="Nombre (ej: Luz)"
+                        className="w-full text-[10px] font-bold border-b border-transparent focus:border-cyan-300 outline-none text-slate-700 mb-1"
+                      />
+                      <div className="relative">
+                        <span className="absolute left-0 top-0.5 text-slate-300 text-[10px]">$</span>
+                        <input 
+                          type="number"
+                          value={item.amount || ''}
+                          onChange={(e) => updateService(item.id, 'amount', parseFloat(e.target.value) || 0)}
+                          placeholder="0"
+                          className="w-full pl-3 text-xs font-black text-cyan-700 border-none outline-none bg-transparent"
+                        />
+                      </div>
+                   </div>
+                   <button 
+                    onClick={() => removeService(item.id)}
+                    className="text-red-300 hover:text-red-500 p-2"
+                  >
+                    <TrashIcon className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+              {(!expenses.utilities || expenses.utilities.length === 0) && (
+                <p className="text-center text-[10px] text-cyan-400 py-2 italic">No hay servicios registrados</p>
+              )}
+            </div>
+          </div>
+
+          {/* SECCIÓN DE NÓMINA */}
           <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 space-y-4">
             <div className="flex justify-between items-center">
               <div>
@@ -120,13 +175,10 @@ export const MonthlySummary: React.FC<MonthlySummaryProps> = ({ expenses, defaul
                   Nómina / Empleados
                 </h4>
                 <p className="text-[10px] text-indigo-600 font-bold mt-1">
-                  Total Nómina: ${calculateTotalPayroll().toLocaleString()}
+                  Total: ${calculateTotalPayroll().toLocaleString()}
                 </p>
               </div>
-              <button 
-                onClick={addEmployee}
-                className="bg-indigo-600 text-white p-2 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
-              >
+              <button onClick={addEmployee} className="bg-indigo-600 text-white p-2 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm">
                 <PlusIcon className="h-4 w-4" />
               </button>
             </div>
@@ -136,13 +188,13 @@ export const MonthlySummary: React.FC<MonthlySummaryProps> = ({ expenses, defaul
                 <div key={emp.id} className="bg-white p-3 rounded-lg border border-indigo-100 shadow-sm relative group">
                   <button 
                     onClick={() => removeEmployee(emp.id)}
-                    className="absolute -top-2 -right-2 bg-red-100 text-red-600 p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute top-2 right-2 text-red-300 hover:text-red-500"
                   >
                     <TrashIcon className="h-3 w-3" />
                   </button>
                   
-                  <div className="mb-2">
-                    <label className="text-[9px] font-bold text-slate-400 uppercase">Nombre Empleado</label>
+                  <div className="mb-2 mr-6">
+                    <label className="text-[9px] font-bold text-slate-400 uppercase">Nombre</label>
                     <input 
                       type="text"
                       value={emp.name}
@@ -154,33 +206,26 @@ export const MonthlySummary: React.FC<MonthlySummaryProps> = ({ expenses, defaul
                   
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-[9px] font-bold text-slate-400 uppercase">Quincena 1</label>
-                      <div className="relative">
-                        <span className="absolute left-0 top-1 text-slate-300 text-xs">$</span>
-                        <input 
-                          type="number"
-                          value={emp.paymentQ1 || ''}
-                          onChange={(e) => updateEmployee(emp.id, 'paymentQ1', parseFloat(e.target.value) || 0)}
-                          className="w-full pl-3 py-1 text-xs font-bold border-b border-slate-200 outline-none focus:border-indigo-500 text-slate-700"
-                        />
-                      </div>
+                      <label className="text-[9px] font-bold text-slate-400 uppercase">1ra Quincena</label>
+                      <input 
+                        type="number"
+                        value={emp.paymentQ1 || ''}
+                        onChange={(e) => updateEmployee(emp.id, 'paymentQ1', parseFloat(e.target.value) || 0)}
+                        className="w-full py-1 text-xs font-bold border-b border-slate-200 outline-none focus:border-indigo-500 text-slate-700"
+                      />
                     </div>
                     <div>
-                      <label className="text-[9px] font-bold text-slate-400 uppercase">Quincena 2</label>
-                      <div className="relative">
-                        <span className="absolute left-0 top-1 text-slate-300 text-xs">$</span>
-                        <input 
-                          type="number"
-                          value={emp.paymentQ2 || ''}
-                          onChange={(e) => updateEmployee(emp.id, 'paymentQ2', parseFloat(e.target.value) || 0)}
-                          className="w-full pl-3 py-1 text-xs font-bold border-b border-slate-200 outline-none focus:border-indigo-500 text-slate-700"
-                        />
-                      </div>
+                      <label className="text-[9px] font-bold text-slate-400 uppercase">2da Quincena</label>
+                      <input 
+                        type="number"
+                        value={emp.paymentQ2 || ''}
+                        onChange={(e) => updateEmployee(emp.id, 'paymentQ2', parseFloat(e.target.value) || 0)}
+                        className="w-full py-1 text-xs font-bold border-b border-slate-200 outline-none focus:border-indigo-500 text-slate-700"
+                      />
                     </div>
                   </div>
                 </div>
               ))}
-              
               {(!expenses.payroll || expenses.payroll.length === 0) && (
                 <p className="text-center text-[10px] text-indigo-400 py-2 italic">No hay empleados registrados</p>
               )}
@@ -213,17 +258,10 @@ export const MonthlySummary: React.FC<MonthlySummaryProps> = ({ expenses, defaul
       </div>
 
       <div className="bg-red-50 rounded-2xl border border-red-100 p-4">
-        <div className="flex items-start gap-3">
-          <ExclamationTriangleIcon className="h-5 w-5 text-red-600 mt-0.5" />
-          <div className="flex-1">
-            <h4 className="text-sm font-bold text-red-900">Mantenimiento</h4>
-            <p className="text-[10px] text-red-700 mb-3 uppercase font-bold">Borrar historial de este mes</p>
-            <button onClick={confirmReset} className="flex items-center gap-2 bg-white border border-red-200 text-red-600 px-4 py-2 rounded-xl text-[10px] font-black hover:bg-red-600 hover:text-white transition-all">
-              <TrashIcon className="h-4 w-4" />
-              REINICIAR TODO EL MES
-            </button>
-          </div>
-        </div>
+        <button onClick={confirmReset} className="w-full flex justify-center items-center gap-2 bg-white border border-red-200 text-red-600 px-4 py-3 rounded-xl text-[10px] font-black hover:bg-red-600 hover:text-white transition-all">
+          <TrashIcon className="h-4 w-4" />
+          REINICIAR TODO EL MES
+        </button>
       </div>
     </div>
   );
