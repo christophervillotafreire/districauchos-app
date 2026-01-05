@@ -177,7 +177,6 @@ const App: React.FC = () => {
                 </h2>
                 <button onClick={() => fileInputRef.current?.click()} className="bg-blue-600 text-white px-5 py-2.5 rounded-full shadow-lg hover:bg-blue-700 active:scale-95 transition-all flex items-center gap-2 font-bold text-xs uppercase tracking-wide">
                   <CameraIcon className="h-5 w-5" />
-                  Escanear
                 </button>
               </div>
               
