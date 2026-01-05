@@ -149,8 +149,8 @@ const App: React.FC = () => {
         
         {/* SECCIÓN 1: Tarjetas Superiores (Grid 2 cols en móvil, 6 en PC) */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          <StatCard icon={<BanknotesIcon className="text-green-600"/>} label="Ventas Efec." value={monthlyStats.cashSales} color="bg-green-50" />
-          <StatCard icon={<CreditCardIcon className="text-purple-600"/>} label="Ventas Nequi" value={monthlyStats.nequiSales} color="bg-purple-50" />
+          <StatCard icon={<BanknotesIcon className="text-green-600"/>} label="Ventas Efect." value={monthlyStats.cashSales} color="bg-green-50" />
+          <StatCard icon={<CreditCardIcon className="text-purple-600"/>} label="Ventas Transf" value={monthlyStats.nequiSales} color="bg-purple-50" />
           <StatCard icon={<ShoppingBagIcon className="text-red-600"/>} label="Gastos Caja" value={monthlyStats.expenses} color="bg-red-50" />
           <StatCard icon={<ArrowUturnLeftIcon className="text-orange-600"/>} label="Devoluciones" value={monthlyStats.returns} color="bg-orange-50" />
           
@@ -160,7 +160,7 @@ const App: React.FC = () => {
           </div>
           <div className="bg-blue-600 p-3 rounded-2xl shadow-lg shadow-blue-100 flex items-center gap-3 text-white col-span-2 md:col-span-1 lg:col-span-1">
              <div className="bg-blue-500/30 p-2 rounded-lg"><ScaleIcon className="h-5 w-5 text-white"/></div>
-             <div className="min-w-0"><p className="text-[10px] font-black text-blue-200 uppercase">Ganancia Bruta</p><p className="text-sm font-black truncate">{formatCurrency(monthlyGrossProfit)}</p></div>
+             <div className="min-w-0"><p className="text-[10px] font-black text-blue-200 uppercase">Ganancia Neta</p><p className="text-sm font-black truncate">{formatCurrency(monthlyGrossProfit)}</p></div>
           </div>
         </div>
 
