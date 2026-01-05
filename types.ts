@@ -36,25 +36,11 @@ export interface ServiceItem {
   amount: number;
 }
 
-// NUEVA INTERFAZ: Para Inversión
-export interface Suppliers {
-  id: string;
-  name: string;
-  amount: number;
-}
-
-// NUEVA INTERFAZ: Para Bancos
-export interface BankLoans {
-  id: string;
-  name: string;
-  amount: number;
-}
-
 export interface MonthlyFixedExpenses {
   utilities: ServiceItem[]; // CAMBIO: Ahora es una lista
   payroll: Employee[];
-  bankLoans: BankLoans[] ;
-  suppliers: Suppliers[];
+  bankLoans: number;
+  suppliers: number;
   rent: number;
   others: number;
 }
@@ -70,8 +56,8 @@ export interface AppState {
 export const INITIAL_FIXED_EXPENSES: MonthlyFixedExpenses = {
   utilities: [], // Inicializa como array vacío
   payroll: [],
-  bankLoans: [],
-  suppliers: [],
+  bankLoans: 0,
+  suppliers: 0,
   rent: 0,
   others: 0
 };
