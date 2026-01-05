@@ -32,7 +32,7 @@ export const Header: React.FC<HeaderProps> = ({ onInstall }) => {
               <ArchiveBoxIcon className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h1 className="text-lg font-bold leading-tight">DISTRICAUCHOS</h1>
+              <h1 className="text-lg font-bold leading-tight">DISTRICAUCHOS Y EMPAQUES DEL SUR</h1>
               <p className="text-[10px] text-blue-400 font-medium uppercase tracking-widest">Finanzas Pro</p>
             </div>
         </div>
