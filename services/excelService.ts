@@ -3,157 +3,130 @@ import { AppState, TransactionType } from "../types";
 
 export const generateMonthlyReport = (state: AppState) => {
   const wb = XLSX.utils.book_new();
-  const monthName = new Date(state.currentYear, state.currentMonth).toLocaleString('es-CO', { month: 'long' });
-  const year = state.currentYear;
-
+  // HEADER DINÁMICO
+  const periodTitle = `${state.monthName} ${state.year}`.toUpperCase();
+  
   let totalSalesCash = 0;
   let totalSalesNequi = 0;
   let totalReturns = 0;
-  let totalDailyExpenses = 0;
-  let totalBaseInMonth = 0;
+  let totalOpExpenses = 0;     // Gastos operativos diarios
+  let totalDailyPurchases = 0; // Inversión diaria en mercancía
 
-  // --- 1. Generar Hojas Diarias (Sin Cambios) ---
-  const daysInMonth = new Date(state.currentYear, state.currentMonth + 1, 0).getDate();
-  for (let i = 1; i <= daysInMonth; i++) {
+  // --- 1. HOJAS DIARIAS ---
+  // Iteramos fijo hasta 31 días por consistencia visual
+  for (let i = 1; i <= 31; i++) {
     const dayData = state.days[i];
     const dayBase = dayData?.initialCash ?? state.defaultInitialCash;
 
     const wsData: (string | number)[][] = [
-      [`DISTRICAUCHOS Y EMPAQUES DEL SUR`],
-      [`Fecha: ${i} de ${monthName} de ${year}`],
+      [`DISTRICAUCHOS - REPORTE DIARIO`],
+      [`FECHA: Día ${i} de ${periodTitle}`], // FECHA DINÁMICA
       [],
-      [`BASE DE CAJA INICIAL:`, dayBase],
+      [`BASE INICIAL:`, dayBase],
       [],
-      ["Descripción", "Tipo", "Efectivo (+)", "Transferencia (+)", "Egresos (-)"]
+      ["Descripción", "Tipo", "Ingreso (+)", "Egreso (-)", "Inversión (Inv)"]
     ];
 
-    let dayCash = 0;
-    let dayNequi = 0;
-    let dayReturns = 0;
-    let dayExpense = 0;
+    let dCash = 0, dNequi = 0, dExp = 0, dInv = 0, dRet = 0;
 
     if (dayData && dayData.transactions) {
       dayData.transactions.forEach(t => {
         const amt = Number(t.amount) || 0;
-        let cashIn = 0;
-        let transferIn = 0;
-        let egreso = 0;
+        let cIn = 0, eg = 0, inv = 0;
 
         switch (t.type) {
-          case TransactionType.CASH_SALE: cashIn = amt; dayCash += amt; break;
-          case TransactionType.NEQUI_SALE: transferIn = amt; dayNequi += amt; break;
-          case TransactionType.RETURN: egreso = amt; dayReturns += amt; break;
-          case TransactionType.DAILY_EXPENSE: egreso = amt; dayExpense += amt; break;
+          case TransactionType.CASH_SALE: cIn = amt; dCash += amt; break;
+          case TransactionType.NEQUI_SALE: dNequi += amt; break; // No suma a columna efectivo visual
+          case TransactionType.RETURN: eg = amt; dRet += amt; break;
+          case TransactionType.DAILY_EXPENSE: eg = amt; dExp += amt; break;
+          case TransactionType.DAILY_PURCHASE: inv = amt; dInv += amt; break; // Nueva columna
         }
-
-        wsData.push([t.description || "Varios", t.type, cashIn || "", transferIn || "", egreso || ""]);
+        
+        // Columna Transferencia visualmente se puede poner en Ingreso o nota
+        const labelIngreso = (t.type === TransactionType.CASH_SALE) ? amt : (t.type === TransactionType.NEQUI_SALE ? `(Nequi: ${amt})` : "");
+        
+        wsData.push([t.description || "Varios", t.type, labelIngreso, eg || "", inv || ""]);
       });
-      totalBaseInMonth += dayBase;
     }
 
     wsData.push([]);
-    wsData.push(["TOTAL VENTAS EFECTIVO", "", dayCash]);
-    wsData.push(["TOTAL VENTAS NEQUI", "", "", dayNequi]);
-    wsData.push(["TOTAL DEVOLUCIONES", "", "", "", dayReturns]);
-    wsData.push(["TOTAL GASTOS CAJA", "", "", "", dayExpense]);
+    wsData.push(["TOTAL VENTAS EFECTIVO", dCash]);
+    wsData.push(["TOTAL VENTAS NEQUI", dNequi]);
+    wsData.push(["GASTOS OPERATIVOS", dExp]);
+    wsData.push(["INVERSIÓN MERCANCÍA", dInv]);
+    
+    // Cuadre de caja físico: Base + VentasEfec - Devoluciones - Gastos - ComprasFísicas
+    const physicalCash = dayBase + dCash - dRet - dExp - dInv;
+    
     wsData.push([]);
-    wsData.push(["EFECTIVO EN CAJA (DINERO FÍSICO)", "", (dayBase + dayCash - dayReturns - dayExpense)]);
-    wsData.push(["UTILIDAD DEL DÍA (TOTAL)", "", (dayCash + dayNequi - dayReturns - dayExpense)]);
+    wsData.push(["CAJA FINAL FÍSICA", physicalCash]);
 
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-
-    totalSalesCash += dayCash;
-    totalSalesNequi += dayNequi;
-    totalReturns += dayReturns;
-    totalDailyExpenses += dayExpense;
-
-    XLSX.utils.book_append_sheet(wb, ws, `Día ${i}`);
+    if (dayData) {
+        totalSalesCash += dCash;
+        totalSalesNequi += dNequi;
+        totalReturns += dRet;
+        totalOpExpenses += dExp;
+        totalDailyPurchases += dInv;
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        XLSX.utils.book_append_sheet(wb, ws, `Día ${i}`);
+    }
   }
 
-  // --- 2. Hoja de Resumen Mensual ---
+  // --- 2. RESUMEN FINAL ---
   const { fixedExpenses } = state;
 
-  // A. CALCULO NÓMINA (Array)
-  let totalPayroll = 0;
-  const payrollRows: (string | number)[][] = [];
-  if (Array.isArray(fixedExpenses.payroll)) {
-    fixedExpenses.payroll.forEach(emp => {
-      const val = (Number(emp.paymentQ1)||0) + (Number(emp.paymentQ2)||0);
-      totalPayroll += val;
-      if (val > 0) payrollRows.push([`      ↳ Empleado: ${emp.name}`, val, "Pago de Nómina"]);
-    });
-  } else {
-    totalPayroll = Number(fixedExpenses.payroll) || 0;
-  }
+  // Calculos de listas
+  const totalPayroll = (fixedExpenses.payroll||[]).reduce((a,b) => a + (Number(b.paymentQ1)||0) + (Number(b.paymentQ2)||0), 0);
+  const totalUtilities = (fixedExpenses.utilities||[]).reduce((a,b) => a + (Number(b.amount)||0), 0);
+  const totalBanks = (fixedExpenses.bankLoans||[]).reduce((a,b) => a + (Number(b.amount)||0), 0);
+  const totalSupplierInvoices = (fixedExpenses.suppliers||[]).reduce((a,b) => a + (Number(b.amount)||0), 0);
+  const rent = Number(fixedExpenses.rent)||0;
+  const others = Number(fixedExpenses.others)||0;
 
-  // B. CALCULO SERVICIOS (Array) - NUEVO
-  let totalUtilities = 0;
-  const utilityRows: (string | number)[][] = [];
-  if (Array.isArray(fixedExpenses.utilities)) {
-    fixedExpenses.utilities.forEach(item => {
-      const val = Number(item.amount) || 0;
-      totalUtilities += val;
-      if (val > 0) utilityRows.push([`      ↳ Servicio: ${item.name}`, val, "Servicios Públicos"]);
-    });
-  } else {
-    totalUtilities = Number(fixedExpenses.utilities) || 0;
-  }
+  // AGRUPACIONES
+  const totalSales = totalSalesCash + totalSalesNequi;
+  const totalFixedOpExpenses = totalPayroll + totalUtilities + rent + others;
+  const totalAllOpExpenses = totalFixedOpExpenses + totalOpExpenses + totalReturns; // + Devoluciones como salida op
+  
+  // INVERSIÓN TOTAL
+  const totalInvestment = totalDailyPurchases + totalSupplierInvoices;
 
-  const fE = {
-    utilities: totalUtilities, // Total Calculado
-    payroll: totalPayroll,     // Total Calculado
-    bankLoans: Number(fixedExpenses.bankLoans) || 0,
-    suppliers: Number(fixedExpenses.suppliers) || 0,
-    rent: Number(fixedExpenses.rent) || 0,
-    others: Number(fixedExpenses.others) || 0,
-  };
+  // FLUJO NETO
+  const netFlow = totalSales - totalAllOpExpenses - totalInvestment - totalBanks;
 
-  const totalFixedExpenses = fE.utilities + fE.payroll + fE.bankLoans + fE.suppliers + fE.rent + fE.others;
-  const totalOperatingIncome = (totalSalesCash + totalSalesNequi);
-  const netProfit = totalOperatingIncome - totalReturns - totalDailyExpenses - totalFixedExpenses;
-  const cashProfit = totalSalesCash - totalReturns - totalDailyExpenses;
-
-  // CONSTRUCCIÓN TABLA RESUMEN
   const summaryData: (string | number)[][] = [
-    ["RESUMEN MENSUAL - DISTRICAUCHOS Y EMPAQUES DEL SUR"],
-    [`Periodo: ${monthName} ${year}`],
+    ["RESUMEN FINANCIERO MENSUAL - DISTRICAUCHOS"],
+    [`PERIODO: ${periodTitle}`],
     [],
-    ["CONCEPTO", "VALOR (COP)", "DETALLE"],
-    ["1. INGRESOS POR VENTAS"],
-    ["   (+) Ventas en Efectivo", totalSalesCash, "Recaudado en local"],
-    ["   (+) Ventas por Transferencia", totalSalesNequi, "Consignaciones Nequi/Otros"],
-    ["   TOTAL VENTAS BRUTAS", totalOperatingIncome, ""],
+    ["CONCEPTO", "VALOR", "NOTAS"],
+    ["(+) TOTAL VENTAS", totalSales, `Efectivo: ${totalSalesCash} / Nequi: ${totalSalesNequi}`],
     [],
-    ["2. EGRESOS OPERATIVOS (CAJA)"],
-    ["   (-) Devoluciones / Garantías", totalReturns, ""],
-    ["   (-) Gastos Diarios Menores", totalDailyExpenses, ""],
+    ["(-) GASTOS OPERATIVOS TOTALES", totalAllOpExpenses],
+    ["    - Devoluciones", totalReturns],
+    ["    - Gastos Menores (Caja)", totalOpExpenses],
+    ["    - Nómina", totalPayroll],
+    ["    - Servicios", totalUtilities],
+    ["    - Arriendo", rent],
+    ["    - Otros", others],
     [],
-    ["   (=) GANANCIA EN EFECTIVO", cashProfit, "Flujo de dinero físico del mes"],
+    ["(-) INVERSIÓN EN MERCANCÍA", totalInvestment],
+    ["    - Compras Diarias (Efectivo)", totalDailyPurchases],
+    ["    - Facturas Proveedores", totalSupplierInvoices],
     [],
-    ["3. GASTOS FIJOS DEL MES"],
-    // Servicios
-    ["   --- SERVICIOS PÚBLICOS ---", fE.utilities],
+    ["(-) PAGOS BANCARIOS", totalBanks],
+    [],
+    ["==================================", "============"],
+    ["(=) FLUJO NETO FINAL (DINERO REAL)", netFlow],
+    ["==================================", "============"],
+    [],
+    ["DETALLE BANCARIO:"],
+    ...((fixedExpenses.bankLoans||[]).map(b => [b.date, b.description, b.amount])),
+    [],
+    ["DETALLE FACTURAS PROVEEDORES:"],
+    ...((fixedExpenses.suppliers||[]).map(s => [s.date, s.description, s.amount]))
   ];
-  utilityRows.forEach(r => summaryData.push(r));
-
-  // Nómina
-  summaryData.push(["   --- NÓMINA ---", fE.payroll]);
-  payrollRows.forEach(r => summaryData.push(r));
-
-  // Resto de gastos
-  summaryData.push(
-    ["   Arriendo", fE.rent],
-    ["   Obligaciones Bancarias", fE.bankLoans],
-    ["   Proveedores", fE.suppliers],
-    ["   Otros Gastos", fE.others],
-    [],
-    ["   TOTAL GASTOS FIJOS", totalFixedExpenses],
-    [],
-    ["---------------------------", "-------------"],
-    ["UTILIDAD NETA FINAL", netProfit, "Resultado neto del ejercicio"],
-  );
 
   const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
   XLSX.utils.book_append_sheet(wb, wsSummary, "RESUMEN FINAL");
-  XLSX.writeFile(wb, `Contabilidad_Districauchos_${monthName}_${year}.xlsx`);
+  XLSX.writeFile(wb, `Reporte_${state.monthName}_${state.year}.xlsx`);
 };
