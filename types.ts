@@ -4,8 +4,7 @@ export enum TransactionType {
   CASH_SALE = 'Venta Efectivo',
   NEQUI_SALE = 'Venta Nequi',
   RETURN = 'Devolución',
-  DAILY_EXPENSE = 'Gasto Diario',
-  DAILY_PURCHASE = 'Compra Mercancía (Diaria)' // NUEVO: Afecta caja, es inversión
+  DAILY_EXPENSE = 'Gasto Diario'
 }
 
 export interface Transaction {
@@ -16,13 +15,13 @@ export interface Transaction {
 }
 
 export interface DayData {
-  day: number;
+  day: number; // 1-31
   transactions: Transaction[];
   hasData: boolean;
-  initialCash?: number;
+  initialCash?: number; // Base de caja del día
 }
 
-// Estructura para NÓMINA
+// Interfaz para Empleados (Nómina)
 export interface Employee {
   id: string;
   name: string;
@@ -30,52 +29,35 @@ export interface Employee {
   paymentQ2: number;
 }
 
-// Estructura para SERVICIOS
+// NUEVA INTERFAZ: Para Servicios Públicos
 export interface ServiceItem {
   id: string;
   name: string;
   amount: number;
 }
 
-// NUEVO: Estructura para BANCOS (Cuotas)
-export interface BankItem {
-  id: string;
-  date: string; // Ej: "15" o fecha completa
-  description: string;
-  amount: number;
-}
-
-// NUEVO: Estructura para FACTURAS PROVEEDORES (Formales)
-export interface SupplierInvoice {
-  id: string;
-  date: string;
-  description: string;
-  amount: number;
-}
-
 export interface MonthlyFixedExpenses {
-  utilities: ServiceItem[];
+  utilities: ServiceItem[]; // CAMBIO: Ahora es una lista
   payroll: Employee[];
-  bankLoans: BankItem[];        // CAMBIO: Ahora es lista
-  suppliers: SupplierInvoice[]; // CAMBIO: Ahora son facturas formales
+  bankLoans: number;
+  suppliers: number;
   rent: number;
   others: number;
 }
 
 export interface AppState {
-  monthName: string; // NUEVO: Dinámico
-  year: number;      // NUEVO: Dinámico
-  currentMonth: number; // Mantenemos para lógica interna de JS si es necesario
+  currentMonth: number;
+  currentYear: number;
   days: Record<number, DayData>;
   fixedExpenses: MonthlyFixedExpenses;
   defaultInitialCash: number;
 }
 
 export const INITIAL_FIXED_EXPENSES: MonthlyFixedExpenses = {
-  utilities: [],
+  utilities: [], // Inicializa como array vacío
   payroll: [],
-  bankLoans: [],
-  suppliers: [],
+  bankLoans: 0,
+  suppliers: 0,
   rent: 0,
   others: 0
 };
