@@ -14,56 +14,124 @@ import {
   CameraIcon, 
   ArrowUturnLeftIcon, 
   CreditCardIcon, 
-  CurrencyDollarIcon
+  CurrencyDollarIcon,
+  UserCircleIcon // Nuevo icono
 } from '@heroicons/react/24/outline';
 
+// --- FIREBASE IMPORTS ---
+import { auth, googleProvider, db } from './firebaseConfig';
+import { signInWithPopup, onAuthStateChanged, signOut, User } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+
 const App: React.FC = () => {
+  // --- ESTADO DE AUTENTICACIÓN ---
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [dataLoaded, setDataLoaded] = useState(false); // Para saber si ya bajamos datos de la nube
+
+  // --- ESTADO DE LA APP ---
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [loadingMessage, setLoadingMessage] = useState<string>('');
   const [installPrompt, setInstallPrompt] = useState<any>(null);
   const [selectedDayNumber, setSelectedDayNumber] = useState<number>(new Date().getDate());
   const [hasManuallySelected, setHasManuallySelected] = useState<boolean>(false);
-
+  const [editingDay, setEditingDay] = useState<DayData | null>(null);
+  
   const today = new Date();
 
-  // --- ESTADO ---
-  const [state, setState] = useState<AppState>(() => {
-    const saved = localStorage.getItem('districauchos_state');
-    if (saved) {
-      try {
-        const parsedState = JSON.parse(saved);
-        
-        // MIGRACIONES (Payroll y Utilities)
-        if (typeof parsedState.fixedExpenses?.payroll === 'number') {
-          const oldAmount = parsedState.fixedExpenses.payroll;
-          parsedState.fixedExpenses.payroll = oldAmount > 0 ? [{ id: 'legacy_p', name: 'Nómina General', paymentQ1: oldAmount, paymentQ2: 0 }] : [];
-        }
-        if (typeof parsedState.fixedExpenses?.utilities === 'number') {
-           const oldUtils = parsedState.fixedExpenses.utilities;
-           parsedState.fixedExpenses.utilities = oldUtils > 0 ? [{ id: 'legacy_u', name: 'Servicios Generales', amount: oldUtils }] : [];
-        }
-        if (!Array.isArray(parsedState.fixedExpenses?.payroll)) parsedState.fixedExpenses.payroll = [];
-        if (!Array.isArray(parsedState.fixedExpenses?.utilities)) parsedState.fixedExpenses.utilities = [];
+  // Estado inicial por defecto
+  const defaultState: AppState = { 
+    currentMonth: today.getMonth(), 
+    currentYear: today.getFullYear(), 
+    days: {}, 
+    fixedExpenses: INITIAL_FIXED_EXPENSES, 
+    defaultInitialCash: 0 
+  };
 
-        return parsedState;
-      } catch (e) {
-        return { currentMonth: today.getMonth(), currentYear: today.getFullYear(), days: {}, fixedExpenses: INITIAL_FIXED_EXPENSES, defaultInitialCash: 0 };
+  const [state, setState] = useState<AppState>(defaultState);
+
+  // 1. ESCUCHAR EL ESTADO DEL USUARIO (LOGIN/LOGOUT)
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      setAuthLoading(false);
+      
+      if (currentUser) {
+        // Si el usuario entra, cargamos sus datos de Firestore
+        setLoadingMessage('Sincronizando datos...');
+        setLoading(true);
+        try {
+          const docRef = doc(db, "users", currentUser.uid);
+          const docSnap = await getDoc(docRef);
+          
+          if (docSnap.exists()) {
+            // Si ya tiene datos guardados, los cargamos
+            const cloudData = docSnap.data() as AppState;
+            // Migraciones de datos antiguos (igual que tenías en localStorage)
+             if (!Array.isArray(cloudData.fixedExpenses?.payroll)) cloudData.fixedExpenses.payroll = [];
+             if (!Array.isArray(cloudData.fixedExpenses?.utilities)) cloudData.fixedExpenses.utilities = [];
+            setState(cloudData);
+          } else {
+            // Si es usuario nuevo, iniciamos con defaultState
+            setState(defaultState);
+          }
+        } catch (error) {
+          console.error("Error cargando datos:", error);
+          alert("Error de conexión al cargar tus datos.");
+        } finally {
+          setLoading(false);
+          setDataLoaded(true); // Marca que ya estamos listos para guardar cambios
+        }
+      } else {
+        setDataLoaded(false);
       }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // 2. GUARDAR EN FIRESTORE CUANDO EL ESTADO CAMBIA
+  // Reemplaza al useEffect de localStorage
+  useEffect(() => {
+    const saveData = async () => {
+      if (user && dataLoaded) {
+        try {
+          await setDoc(doc(db, "users", user.uid), state);
+          console.log("Datos guardados en nube");
+        } catch (e) {
+          console.error("Error guardando:", e);
+        }
+      }
+    };
+
+    // Usamos un pequeño delay (debounce) para no saturar la base de datos si escribes rápido
+    const timer = setTimeout(() => {
+      saveData();
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [state, user, dataLoaded]);
+
+
+  // --- FUNCIONES DE AUTH ---
+  const handleLogin = async () => {
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (error) {
+      console.error(error);
+      alert("Error al iniciar sesión");
     }
-    return { currentMonth: today.getMonth(), currentYear: today.getFullYear(), days: {}, fixedExpenses: INITIAL_FIXED_EXPENSES, defaultInitialCash: 0 };
-  });
+  };
 
-  const [editingDay, setEditingDay] = useState<DayData | null>(null);
+  const handleLogout = () => {
+    const confirm = window.confirm("¿Cerrar sesión? Los datos ya están guardados en la nube.");
+    if(confirm) signOut(auth);
+  };
 
+  // --- CALCULOS (TU LÓGICA ORIGINAL) ---
   const daysInMonth = new Date(state.currentYear, state.currentMonth + 1, 0).getDate();
   const monthName = new Intl.DateTimeFormat('es-CO', { month: 'long' }).format(new Date(state.currentYear, state.currentMonth)).toUpperCase();
 
-  useEffect(() => {
-    localStorage.setItem('districauchos_state', JSON.stringify(state));
-  }, [state]);
-
-  // --- CALCULOS ---
   const monthlyStats = (Object.values(state.days) as DayData[]).reduce(
     (acc: { cashSales: number; nequiSales: number; expenses: number; returns: number }, day: DayData) => {
       day.transactions.forEach((t: Transaction) => {
@@ -129,9 +197,51 @@ const App: React.FC = () => {
   const monthlyCashProfit = monthlyStats.cashSales - monthlyStats.returns - monthlyStats.expenses;
   const monthlyGrossProfit = (monthlyStats.cashSales + monthlyStats.nequiSales) - monthlyStats.returns - monthlyStats.expenses;
 
+  // --- RENDERIZADO CONDICIONAL (LOGIN vs APP) ---
+
+  if (authLoading) {
+    return <div className="h-screen flex items-center justify-center bg-slate-50 text-slate-400">Cargando aplicación...</div>;
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 p-6 text-center">
+        <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-sm w-full space-y-6">
+          <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <ScaleIcon className="h-8 w-8" />
+          </div>
+          <h1 className="text-2xl font-black text-slate-800">Districauchos App</h1>
+          <p className="text-slate-500 text-sm">Inicia sesión para acceder a tus registros financieros de forma segura y sincronizada.</p>
+          
+          <button 
+            onClick={handleLogin}
+            className="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-xl hover:bg-blue-700 transition-colors flex items-center justify-center gap-3"
+          >
+            <svg className="w-5 h-5" viewBox="0 0 24 24">
+                <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.24.81-.6z" />
+                <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+            </svg>
+            Entrar con Google
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // --- APP PRINCIPAL (SOLO SI HAY USUARIO) ---
   return (
     <div className="min-h-screen pb-44 bg-slate-50 font-sans">
-      <Header onInstall={installPrompt ? () => installPrompt.prompt() : undefined} />
+      {/* Modificación en Header para Logout */}
+      <div className="flex justify-between items-center p-4 bg-white border-b border-slate-200 lg:px-8">
+         <Header onInstall={installPrompt ? () => installPrompt.prompt() : undefined} />
+         <button onClick={handleLogout} className="text-xs font-bold text-red-500 hover:text-red-700 uppercase flex flex-col items-center">
+            <UserCircleIcon className="h-6 w-6 mb-1"/>
+            Salir
+         </button>
+      </div>
+
       <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept="image/*,application/pdf" multiple className="hidden" />
 
       {loading && (
@@ -144,10 +254,9 @@ const App: React.FC = () => {
 
       {editingDay && <DayEditor dayData={editingDay} defaultBase={state.defaultInitialCash} onSave={saveDayData} onCancel={() => setEditingDay(null)} />}
 
-      {/* CAMBIO CLAVE: Container más ancho y Grilla Responsiva */}
       <main className="container mx-auto max-w-7xl p-4 lg:p-8 space-y-6">
         
-        {/* SECCIÓN 1: Tarjetas Superiores (Grid 2 cols en móvil, 6 en PC) */}
+        {/* SECCIÓN 1: Tarjetas */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           <StatCard icon={<BanknotesIcon className="text-green-600"/>} label="Ventas Efect." value={monthlyStats.cashSales} color="bg-green-50" />
           <StatCard icon={<CreditCardIcon className="text-purple-600"/>} label="Ventas Transf" value={monthlyStats.nequiSales} color="bg-purple-50" />
@@ -164,10 +273,9 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        {/* SECCIÓN 2: Layout Principal (1 col en Móvil, 12 cols en PC) */}
+        {/* SECCIÓN 2: Layout Principal */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           
-          {/* COLUMNA IZQUIERDA (Calendario) - Ocupa 7/12 en PC */}
           <div className="lg:col-span-7 space-y-6">
             <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 h-full">
               <div className="flex justify-between items-center mb-6">
@@ -180,7 +288,6 @@ const App: React.FC = () => {
                 </button>
               </div>
               
-              {/* Calendario Responsive */}
               <div className="grid grid-cols-7 gap-2 lg:gap-3">
                 {['D','L','M','M','J','V','S'].map(d => <span key={d} className="text-center text-xs font-bold text-slate-300 mb-2">{d}</span>)}
                 {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => {
@@ -204,10 +311,8 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          {/* COLUMNA DERECHA (Detalles + Config) - Ocupa 5/12 en PC */}
           <div className="lg:col-span-5 space-y-6">
             
-            {/* Panel Día Seleccionado */}
             {selectedDayNumber && (
               <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden animate-in slide-in-from-right-4 duration-500">
                 <div className="bg-slate-900 p-5 flex justify-between items-center text-white">
@@ -225,20 +330,20 @@ const App: React.FC = () => {
 
                 <div className="p-5 space-y-4">
                   <div className="grid grid-cols-2 gap-4 pb-4 border-b border-slate-100">
-                     <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
                         <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">Efec. Ventas</p>
                         <p className="text-lg font-bold text-slate-800">{formatCurrency(dayStats.cashSales)}</p>
-                     </div>
-                     <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                      </div>
+                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
                         <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">Transferencia</p>
                         <p className="text-lg font-bold text-purple-600">{formatCurrency(dayStats.nequiSales)}</p>
-                     </div>
+                      </div>
                   </div>
 
                   <div className="flex justify-between items-center bg-green-50 p-4 rounded-2xl border border-green-100">
                     <div>
                       <span className="block text-[10px] text-green-700 font-black uppercase tracking-widest">Saldo Físico en Caja</span>
-                      <span className="text-[10px] text-green-600 font-medium">Debe haber en billetes</span>
+                      <span className="text-xs text-green-600 font-medium">Debe haber en billetes</span>
                     </div>
                     <span className="text-xl font-black text-green-700">{formatCurrency(dayNetCaja)}</span>
                   </div>
@@ -246,7 +351,7 @@ const App: React.FC = () => {
                   <div className="flex justify-between items-center bg-blue-50 p-4 rounded-2xl border border-blue-100">
                     <div>
                       <span className="block text-[10px] text-blue-700 font-black uppercase tracking-widest">Utilidad Real del Día</span>
-                      <span className="text-[10px] text-blue-600 font-medium">Ganancia neta</span>
+                      <span className="text-xs text-blue-600 font-medium">Ganancia neta</span>
                     </div>
                     <span className="text-xl font-black text-blue-700">{formatCurrency(dayTotalProfit)}</span>
                   </div>
@@ -254,20 +359,22 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {/* Panel Configuración (Resumen Mensual) */}
             <MonthlySummary 
               expenses={state.fixedExpenses} 
               defaultBase={state.defaultInitialCash} 
               onChange={(ex) => setState(p => ({...p, fixedExpenses: ex}))} 
               onBaseChange={(base) => setState(p => ({...p, defaultInitialCash: base}))} 
               dayCount={Object.keys(state.days).length} 
-              onReset={() => setState(p => ({...p, days: {}, fixedExpenses: INITIAL_FIXED_EXPENSES, defaultInitialCash: 0}))} 
+              onReset={() => {
+                if(confirm("¿Estás seguro de reiniciar el mes? Esto borrará los datos.")) {
+                  setState(p => ({...p, days: {}, fixedExpenses: INITIAL_FIXED_EXPENSES, defaultInitialCash: 0}));
+                }
+              }} 
             />
           </div>
         </div>
       </main>
 
-      {/* Botón Flotante Exportar */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 shadow-[0_-10px_30px_rgba(0,0,0,0.08)] z-40">
         <div className="container mx-auto max-w-7xl flex justify-end">
            <button onClick={handleExport} disabled={Object.keys(state.days).length === 0} className={`px-8 py-3 rounded-xl font-black text-white transition-all uppercase text-xs tracking-widest flex items-center gap-3 ${Object.keys(state.days).length === 0 ? 'bg-slate-200 text-slate-400' : 'bg-slate-900 hover:bg-black shadow-xl shadow-slate-200 active:scale-95'}`}>
@@ -280,7 +387,6 @@ const App: React.FC = () => {
   );
 };
 
-// Componente auxiliar para tarjetas pequeñas
 const StatCard = ({ icon, label, value, color }: any) => {
   const format = (v: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(v);
   return (
