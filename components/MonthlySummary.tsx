@@ -248,7 +248,7 @@ export const MonthlySummary: React.FC<MonthlySummaryProps> = ({ expenses, defaul
                onClick={() => setProviderTab('FORMAL')}
                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${providerTab === 'FORMAL' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
              >
-               <BuildingStoreIcon className="h-4 w-4" /> Facturas / Abonos
+               <BuildingStorefrontIcon className="h-4 w-4" /> Facturas / Abonos
              </button>
           </div>
 
