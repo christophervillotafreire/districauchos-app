@@ -51,14 +51,14 @@ const App: React.FC = () => {
 
   const [state, setState] = useState<AppState>(defaultState);
 
-  // 1. ESCUCHAR EL ESTADO DEL USUARIO (LOGIN/LOGOUT)
+// 1. ESCUCHAR EL ESTADO DEL USUARIO Y CORREGIR DATOS
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       setAuthLoading(false);
       
       if (currentUser) {
-        setLoadingMessage('Sincronizando datos...');
+        setLoadingMessage('Verificando datos...');
         setLoading(true);
         try {
           const docRef = doc(db, "users", currentUser.uid);
@@ -67,41 +67,35 @@ const App: React.FC = () => {
           if (docSnap.exists()) {
             const cloudData = docSnap.data();
             const cloudFixed = cloudData.fixedExpenses || {};
-          
-            // --- CORRECCIÓN: SANEAMIENTO EXPLÍCITO DE DATOS ---
-            // Construimos el objeto de gastos asegurando que cada lista sea un Array real.
-            // Si en la nube es null, undefined, o un número (versión vieja), forzamos [].
-            const sanitizedFixedExpenses = {
-              ...INITIAL_FIXED_EXPENSES, // 1. Base limpia
-              ...cloudFixed,             // 2. Sobrescribimos con datos de la nube (renta, etc.)
-              
-              // 3. FORZAMOS QUE LAS LISTAS SEAN ARRAYS (Esto arregla el pantallazo azul)
-              utilities: Array.isArray(cloudFixed.utilities) ? cloudFixed.utilities : [],
-              payroll: Array.isArray(cloudFixed.payroll) ? cloudFixed.payroll : [],
-              
-              // Aquí es donde fallaba: si cloudFixed.providersOccasional era undefined, el spread podía fallar
-              bankTransactions: Array.isArray(cloudFixed.bankTransactions) ? cloudFixed.bankTransactions : [],
-              providersOccasional: Array.isArray(cloudFixed.providersOccasional) ? cloudFixed.providersOccasional : [],
-              providersFormal: Array.isArray(cloudFixed.providersFormal) ? cloudFixed.providersFormal : [],
-            };
-          
-            const safeState: AppState = { 
-              ...defaultState,
-              currentMonth: cloudData.currentMonth ?? defaultState.currentMonth,
-              currentYear: cloudData.currentYear ?? defaultState.currentYear,
-              defaultInitialCash: cloudData.defaultInitialCash ?? defaultState.defaultInitialCash,
-              days: cloudData.days || {},
-              fixedExpenses: sanitizedFixedExpenses // Asignamos el objeto ya saneado
-            };
-          
-            setState(safeState);
+
+            // --- DETECTOR DE DATOS VIEJOS ---
+            // Verificamos si la nueva lista "providersFormal" existe y es un Array.
+            // Si NO es un array (es undefined o un número viejo), asumimos que la DB está sucia.
+            const isOldData = !Array.isArray(cloudFixed.providersFormal) || !Array.isArray(cloudFixed.providersOccasional);
+
+            if (isOldData) {
+              console.warn("⚠️ Datos incompatibles detectados. Realizando limpieza automática...");
+              // SOBRESCRIBIMOS LA NUBE CON EL ESTADO LIMPIO (defaultState)
+              await setDoc(docRef, defaultState);
+              setState(defaultState);
+            } else {
+              // Si los datos están bien, cargamos normalmente fusionando con seguridad
+              setState({
+                ...defaultState,
+                ...cloudData, // Carga datos básicos (mes, año)
+                days: cloudData.days || {},
+                fixedExpenses: {
+                  ...INITIAL_FIXED_EXPENSES,
+                  ...cloudFixed // Carga los gastos guardados
+                }
+              } as AppState);
+            }
           } else {
+            // Si no existe documento, creamos uno nuevo
             setState(defaultState);
           }
-
         } catch (error) {
-          console.error("Error cargando datos:", error);
-          // En caso de emergencia, cargamos el estado por defecto para que no se quede pegado
+          console.error("Error cargando:", error);
           setState(defaultState);
         } finally {
           setLoading(false);
