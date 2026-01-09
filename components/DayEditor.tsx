@@ -73,26 +73,26 @@ export const DayEditor: React.FC<DayEditorProps> = ({ dayData, defaultBase, onSa
           />
         </div>
 
-        <div className="grid grid-cols-4 gap-2">
-          <div className="bg-slate-50 p-2 rounded-xl border border-slate-100 flex flex-col items-center">
-            <BanknotesIcon className="h-4 w-4 text-green-600 mb-1" />
-            <span className="text-[8px] font-bold text-slate-400 uppercase">Efectivo</span>
-            <p className="font-bold text-slate-900 text-[10px]">{formatCurrency(cashSales)}</p>
+       <div className="grid grid-cols-4 gap-3">
+          <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 flex flex-col items-center justify-center text-center shadow-sm">
+            <BanknotesIcon className="h-6 w-6 text-green-600 mb-1" />
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">Efectivo</span>
+            <p className="font-black text-slate-900 text-base lg:text-lg">{formatCurrency(cashSales)}</p>
           </div>
-          <div className="bg-slate-50 p-2 rounded-xl border border-slate-100 flex flex-col items-center">
-            <CreditCardIcon className="h-4 w-4 text-purple-600 mb-1" />
-            <span className="text-[8px] font-bold text-slate-400 uppercase">Transfer</span>
-            <p className="font-bold text-slate-900 text-[10px]">{formatCurrency(nequiSales)}</p>
+          <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 flex flex-col items-center justify-center text-center shadow-sm">
+            <CreditCardIcon className="h-6 w-6 text-purple-600 mb-1" />
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">Transfer</span>
+            <p className="font-black text-slate-900 text-base lg:text-lg">{formatCurrency(nequiSales)}</p>
           </div>
-          <div className="bg-slate-50 p-2 rounded-xl border border-slate-100 flex flex-col items-center">
-            <ArrowUturnLeftIcon className="h-4 w-4 text-orange-600 mb-1" />
-            <span className="text-[8px] font-bold text-slate-400 uppercase">Devolu.</span>
-            <p className="font-bold text-slate-900 text-[10px]">{formatCurrency(returns)}</p>
+          <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 flex flex-col items-center justify-center text-center shadow-sm">
+            <ArrowUturnLeftIcon className="h-6 w-6 text-orange-600 mb-1" />
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">Devolu.</span>
+            <p className="font-black text-slate-900 text-base lg:text-lg">{formatCurrency(returns)}</p>
           </div>
-          <div className="bg-slate-50 p-2 rounded-xl border border-slate-100 flex flex-col items-center">
-            <ShoppingBagIcon className="h-4 w-4 text-red-600 mb-1" />
-            <span className="text-[8px] font-bold text-slate-400 uppercase">Gastos</span>
-            <p className="font-bold text-slate-900 text-[10px]">{formatCurrency(dailyExpenses)}</p>
+          <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 flex flex-col items-center justify-center text-center shadow-sm">
+            <ShoppingBagIcon className="h-6 w-6 text-red-600 mb-1" />
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">Gastos</span>
+            <p className="font-black text-slate-900 text-base lg:text-lg">{formatCurrency(dailyExpenses)}</p>
           </div>
         </div>
       </div>
@@ -110,9 +110,21 @@ export const DayEditor: React.FC<DayEditorProps> = ({ dayData, defaultBase, onSa
           )
           .map((t) => (
             <div key={t.id} className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 animate-in slide-in-from-bottom-2">
-              <div className="flex gap-2 mb-2">
-                <input type="text" value={t.description} onChange={(e) => updateTransaction(t.id, 'description', e.target.value)} placeholder="Descripción..." className="flex-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-300" />
-                <input type="number" value={t.amount || ''} onChange={(e) => updateTransaction(t.id, 'amount', parseFloat(e.target.value) || 0)} placeholder="0" className="w-24 p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-right outline-none focus:border-blue-300" />
+             <div className="flex gap-3 mb-2">
+                <input 
+                  type="text" 
+                  value={t.description} 
+                  onChange={(e) => updateTransaction(t.id, 'description', e.target.value)} 
+                  placeholder="Descripción..." 
+                  className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-lg text-base outline-none focus:border-blue-300 focus:bg-white transition-colors" 
+                />
+                <input 
+                  type="number" 
+                  value={t.amount || ''} 
+                  onChange={(e) => updateTransaction(t.id, 'amount', parseFloat(e.target.value) || 0)} 
+                  placeholder="0" 
+                  className="w-40 lg:w-48 p-3 bg-slate-50 border border-slate-200 rounded-lg text-base lg:text-lg font-bold text-right outline-none focus:border-blue-300 focus:bg-white transition-colors" 
+                />
               </div>
               <div className="flex justify-between items-center">
                 <select value={t.type} onChange={(e) => updateTransaction(t.id, 'type', e.target.value)} className="text-[10px] font-bold bg-slate-100 p-1.5 rounded-lg border-none text-slate-600 uppercase">
@@ -138,20 +150,21 @@ export const DayEditor: React.FC<DayEditorProps> = ({ dayData, defaultBase, onSa
         </button>
       </div>
 
-      <div className="bg-slate-900 p-4 pb-safe-bottom text-white flex flex-col gap-2">
-        <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+      {/* BLOQUE CORREGIDO 3: FOOTER MÁS GRANDE Y LEGIBLE */}
+      <div className="bg-slate-900 p-5 pb-safe-bottom text-white flex flex-col gap-4 shadow-[0_-5px_20px_rgba(0,0,0,0.2)]">
+        <div className="flex justify-between items-center border-b border-slate-700 pb-3">
           <div className="flex flex-col">
-            <span className="text-[9px] font-bold text-green-400 uppercase tracking-widest">Efectivo Físico Esperado</span>
-            <span className="text-[8px] text-slate-500">(Base + Efectivo - Egresos)</span>
+            <span className="text-xs lg:text-sm font-black text-green-400 uppercase tracking-widest">Efectivo Físico Esperado</span>
+            <span className="text-[10px] lg:text-xs text-slate-400 font-medium">(Base + Efectivo - Egresos)</span>
           </div>
-          <span className="text-xl font-black text-green-400">{formatCurrency(netCaja)}</span>
+          <span className="text-2xl lg:text-3xl font-black text-green-400 tracking-tight">{formatCurrency(netCaja)}</span>
         </div>
-        <div className="flex justify-between items-center opacity-70">
+        <div className="flex justify-between items-center opacity-90">
           <div className="flex flex-col">
-            <span className="text-[9px] font-bold text-blue-300 uppercase tracking-widest">Ganancia Operativa Día</span>
-            <span className="text-[8px] text-slate-500">(Todas las Ventas - Egresos)</span>
+            <span className="text-xs lg:text-sm font-black text-blue-300 uppercase tracking-widest">Ganancia Operativa Día</span>
+            <span className="text-[10px] lg:text-xs text-slate-400 font-medium">(Todas las Ventas - Egresos)</span>
           </div>
-          <span className="text-lg font-bold text-blue-300">{formatCurrency(totalProfit)}</span>
+          <span className="text-xl lg:text-2xl font-bold text-blue-300 tracking-tight">{formatCurrency(totalProfit)}</span>
         </div>
       </div>
     </div>
