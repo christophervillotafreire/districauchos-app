@@ -68,9 +68,15 @@ const App: React.FC = () => {
           if (docSnap.exists()) {
             // Si ya tiene datos guardados, los cargamos
             const cloudData = docSnap.data() as AppState;
-            // Migraciones de datos antiguos (igual que tenías en localStorage)
+              // Migraciones de datos antiguos
              if (!Array.isArray(cloudData.fixedExpenses?.payroll)) cloudData.fixedExpenses.payroll = [];
              if (!Array.isArray(cloudData.fixedExpenses?.utilities)) cloudData.fixedExpenses.utilities = [];
+             
+             // --- NUEVA MIGRACIÓN: Asegurar que existan las listas de proveedores y bancos ---
+             if (!Array.isArray(cloudData.fixedExpenses?.bankTransactions)) cloudData.fixedExpenses.bankTransactions = [];
+             if (!Array.isArray(cloudData.fixedExpenses?.providersOccasional)) cloudData.fixedExpenses.providersOccasional = [];
+             if (!Array.isArray(cloudData.fixedExpenses?.providersFormal)) cloudData.fixedExpenses.providersFormal = [];
+
             setState(cloudData);
           } else {
             // Si es usuario nuevo, iniciamos con defaultState
