@@ -24,6 +24,8 @@ import { auth, googleProvider, db } from './firebaseConfig';
 import { signInWithPopup, onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 
+const App: React.FC = () => {
+
 // --- ESTADO DE AUTENTICACIÓN ---
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
