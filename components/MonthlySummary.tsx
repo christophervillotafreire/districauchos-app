@@ -39,7 +39,7 @@ export const MonthlySummary: React.FC<MonthlySummaryProps> = ({ expenses, defaul
       <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="bg-slate-800 p-4 text-white flex justify-between items-center">
           <div>
-            <h3 className="font-black flex items-center gap-2 text-sm uppercase"><CurrencyDollarIcon className="h-4 w-4 text-blue-400" /> Configuración</h3>
+            <h3 className="font-black flex items-center gap-2 text-sm uppercase"><CurrencyDollarIcon className="h-4 w-4 text-blue-400" /> Cierre de Mes</h3>
           </div>
           <div className="bg-slate-700 px-3 py-1 rounded-full border border-slate-600">
              <span className="text-[10px] font-bold text-slate-300">Base Diaria:</span>
