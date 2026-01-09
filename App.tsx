@@ -232,7 +232,7 @@ const App: React.FC = () => {
 
   // --- APP PRINCIPAL (SOLO SI HAY USUARIO) ---
   return (
-    <div className="min-h-screen pb-44 bg-slate-50 font-sans lg:text-lg">
+    <div className="min-h-screen pb-44 bg-slate-50 font-sans xl:text-xl">
       {/* Modificación en Header para Logout */}
       <Header
         onInstall={installPrompt ? () => installPrompt.prompt() : undefined}
