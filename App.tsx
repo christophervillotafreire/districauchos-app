@@ -24,11 +24,10 @@ import { auth, googleProvider, db } from './firebaseConfig';
 import { signInWithPopup, onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 
-const App: React.FC = () => {
-  // --- ESTADO DE AUTENTICACIÓN ---
+// --- ESTADO DE AUTENTICACIÓN ---
   const [user, setUser] = useState<User | null>(null);
-  const [authLoading, setAuthLoading] = (true);
-  const [dataLoaded, setDataLoaded] = (false); // Para saber si ya bajamos datos de la nube
+  const [authLoading, setAuthLoading] = useState(true);
+  const [dataLoaded, setDataLoaded] = useState(false);
 
   // --- ESTADO DE LA APP ---
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -36,13 +35,13 @@ const App: React.FC = () => {
   const [loadingMessage, setLoadingMessage] = useState<string>('');
   const [installPrompt, setInstallPrompt] = useState<any>(null);
 
-  // AQUÍ ESTABA EL ERROR (te faltaba 'useState'):
+  // Estados corregidos (Asegúrate de copiar todo esto exacto)
   const [selectedDayNumber, setSelectedDayNumber] = useState<number>(new Date().getDate());
   const [hasManuallySelected, setHasManuallySelected] = useState<boolean>(false);
   const [editingDay, setEditingDay] = useState<DayData | null>(null);
   
-  // El nuevo estado que agregamos
-  const [isAdmin, setIsAdmin] = useState(false);
+  // Estado para el PIN de administrador
+  const [isAdmin, setIsAdmin] = useState(false); 
 
   const handleAdminUnlock = () => {
     const pin = prompt("Ingrese el PIN de Administrador:");
@@ -64,7 +63,7 @@ const App: React.FC = () => {
     defaultInitialCash: 0 
   };
 
-  const [state, setState] = <AppState>(defaultState);
+  const [state, setState] = useState<AppState>(defaultState);
 
 // 1. ESCUCHAR EL ESTADO DEL USUARIO Y SINCRONIZAR EN TIEMPO REAL
   useEffect(() => {
