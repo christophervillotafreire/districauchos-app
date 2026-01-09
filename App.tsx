@@ -65,41 +65,40 @@ const App: React.FC = () => {
           const docSnap = await getDoc(docRef);
           
           if (docSnap.exists()) {
-            const cloudData = docSnap.data(); // Obtenemos datos crudos sin forzar tipo todavía
-            
-            // --- ESTRATEGIA DE FUSIÓN SEGURA (A PRUEBA DE FALLOS) ---
-            
-            // 1. Creamos un "esqueleto" nuevo y perfecto
-            const safeState: AppState = { ...defaultState };
-
-            // 2. Recuperamos datos básicos si existen
-            if (cloudData.currentMonth !== undefined) safeState.currentMonth = cloudData.currentMonth;
-            if (cloudData.currentYear !== undefined) safeState.currentYear = cloudData.currentYear;
-            if (cloudData.defaultInitialCash !== undefined) safeState.defaultInitialCash = cloudData.defaultInitialCash;
-            if (cloudData.days) safeState.days = cloudData.days;
-
-            // 3. Reconstrucción quirúrgica de FixedExpenses
-            // (Tomamos los valores de la nube, pero si faltan listas, usamos las vacías del nuevo sistema)
+            const cloudData = docSnap.data();
             const cloudFixed = cloudData.fixedExpenses || {};
-            
-            safeState.fixedExpenses = {
-              ...INITIAL_FIXED_EXPENSES, // Cargamos la estructura nueva primero (garantiza que existan providersOccasional, etc)
-              ...cloudFixed,             // Sobreescribimos con los datos viejos (renta, valores antiguos)
+          
+            // --- CORRECCIÓN: SANEAMIENTO EXPLÍCITO DE DATOS ---
+            // Construimos el objeto de gastos asegurando que cada lista sea un Array real.
+            // Si en la nube es null, undefined, o un número (versión vieja), forzamos [].
+            const sanitizedFixedExpenses = {
+              ...INITIAL_FIXED_EXPENSES, // 1. Base limpia
+              ...cloudFixed,             // 2. Sobrescribimos con datos de la nube (renta, etc.)
+              
+              // 3. FORZAMOS QUE LAS LISTAS SEAN ARRAYS (Esto arregla el pantallazo azul)
+              utilities: Array.isArray(cloudFixed.utilities) ? cloudFixed.utilities : [],
+              payroll: Array.isArray(cloudFixed.payroll) ? cloudFixed.payroll : [],
+              
+              // Aquí es donde fallaba: si cloudFixed.providersOccasional era undefined, el spread podía fallar
+              bankTransactions: Array.isArray(cloudFixed.bankTransactions) ? cloudFixed.bankTransactions : [],
+              providersOccasional: Array.isArray(cloudFixed.providersOccasional) ? cloudFixed.providersOccasional : [],
+              providersFormal: Array.isArray(cloudFixed.providersFormal) ? cloudFixed.providersFormal : [],
             };
-
-            // 4. Validación final obligatoria de Arrays (Evita que .map() explote)
-            safeState.fixedExpenses.payroll = Array.isArray(cloudFixed.payroll) ? cloudFixed.payroll : [];
-            safeState.fixedExpenses.utilities = Array.isArray(cloudFixed.utilities) ? cloudFixed.utilities : [];
-            
-            // Aquí está la magia: Si en la nube no existen, usamos [] (Array vacío)
-            safeState.fixedExpenses.bankTransactions = Array.isArray(cloudFixed.bankTransactions) ? cloudFixed.bankTransactions : [];
-            safeState.fixedExpenses.providersOccasional = Array.isArray(cloudFixed.providersOccasional) ? cloudFixed.providersOccasional : [];
-            safeState.fixedExpenses.providersFormal = Array.isArray(cloudFixed.providersFormal) ? cloudFixed.providersFormal : [];
-
+          
+            const safeState: AppState = { 
+              ...defaultState,
+              currentMonth: cloudData.currentMonth ?? defaultState.currentMonth,
+              currentYear: cloudData.currentYear ?? defaultState.currentYear,
+              defaultInitialCash: cloudData.defaultInitialCash ?? defaultState.defaultInitialCash,
+              days: cloudData.days || {},
+              fixedExpenses: sanitizedFixedExpenses // Asignamos el objeto ya saneado
+            };
+          
             setState(safeState);
           } else {
             setState(defaultState);
           }
+
         } catch (error) {
           console.error("Error cargando datos:", error);
           // En caso de emergencia, cargamos el estado por defecto para que no se quede pegado
