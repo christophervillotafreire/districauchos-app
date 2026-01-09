@@ -110,20 +110,20 @@ export const DayEditor: React.FC<DayEditorProps> = ({ dayData, defaultBase, onSa
           )
           .map((t) => (
             <div key={t.id} className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 animate-in slide-in-from-bottom-2">
-             <div className="flex gap-2 lg:gap-3 mb-2">
+              <div className="grid grid-cols-12 gap-2 mb-2">
                 <input 
                   type="text" 
                   value={t.description} 
                   onChange={(e) => updateTransaction(t.id, 'description', e.target.value)} 
-                  placeholder="Descripción..." 
-                  className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-lg text-sm lg:text-base outline-none focus:border-blue-300 focus:bg-white transition-colors" 
+                  placeholder="Descripción" 
+                  className="col-span-7 lg:col-span-9 w-full p-3 bg-slate-50 border border-slate-200 rounded-lg text-sm lg:text-base outline-none focus:border-blue-300 focus:bg-white transition-colors" 
                 />
                 <input 
                   type="number" 
                   value={t.amount || ''} 
                   onChange={(e) => updateTransaction(t.id, 'amount', parseFloat(e.target.value) || 0)} 
                   placeholder="0" 
-                  className="w-32 lg:w-48 p-3 bg-slate-50 border border-slate-200 rounded-lg text-base lg:text-lg font-bold text-right outline-none focus:border-blue-300 focus:bg-white transition-colors"
+                  className="col-span-5 lg:col-span-3 w-full p-3 bg-slate-50 border border-slate-200 rounded-lg text-base lg:text-lg font-bold text-right outline-none focus:border-blue-300 focus:bg-white transition-colors" 
                 />
               </div>
               <div className="flex justify-between items-center">
