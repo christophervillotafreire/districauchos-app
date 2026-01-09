@@ -356,29 +356,32 @@ const App: React.FC = () => {
               </div>
             )}
 
-            <MonthlySummary 
+          </div>
+        </div>
+        <div className="w-full mt-6">
+          <MonthlySummary 
               expenses={state.fixedExpenses} 
               defaultBase={state.defaultInitialCash} 
               onChange={(ex) => setState(p => ({...p, fixedExpenses: ex}))} 
               onBaseChange={(base) => setState(p => ({...p, defaultInitialCash: base}))} 
               dayCount={Object.keys(state.days).length} 
               onReset={() => {
-                // ESTE ES EL CAMBIO MÁGICO:
                 if(confirm("¿Deseas cerrar el mes actual e iniciar uno nuevo?")) {
-                  const now = new Date(); // 1. Mira la fecha real de hoy
+                  const now = new Date(); 
                   setState({
-                    currentMonth: now.getMonth(), // 2. Pone el mes actual
-                    currentYear: now.getFullYear(), // 3. Pone el año actual
-                    days: {}, // 4. Limpia los registros
+                    currentMonth: now.getMonth(), 
+                    currentYear: now.getFullYear(), 
+                    days: {}, 
                     fixedExpenses: state.fixedExpenses, 
                     defaultInitialCash: 0 
                   });
                 }
               }} 
             />
-          </div>
         </div>
+
       </main>
+
 
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 shadow-[0_-10px_30px_rgba(0,0,0,0.08)] z-40">
         <div className="container mx-auto max-w-7xl flex justify-end">
