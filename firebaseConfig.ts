@@ -4,7 +4,7 @@ import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyD8jbPnwpnVLS3KFT0keZxcbTxZFFAyxIg",
+  apiKey: "AIzaSyD8jbPnwpnVlS3KFTOkeZxcbTxZFFAyxIg",
   authDomain: "districauchos-329e7.firebaseapp.com",
   projectId: "districauchos-329e7",
   storageBucket: "districauchos-329e7.firebasestorage.app",
