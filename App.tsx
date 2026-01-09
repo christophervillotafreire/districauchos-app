@@ -366,8 +366,16 @@ const App: React.FC = () => {
               onBaseChange={(base) => setState(p => ({...p, defaultInitialCash: base}))} 
               dayCount={Object.keys(state.days).length} 
               onReset={() => {
-                if(confirm("¿Estás seguro de reiniciar el mes? Esto borrará los datos.")) {
-                  setState(p => ({...p, days: {}, fixedExpenses: INITIAL_FIXED_EXPENSES, defaultInitialCash: 0}));
+                // ESTE ES EL CAMBIO MÁGICO:
+                if(confirm("¿Deseas cerrar el mes actual e iniciar uno nuevo?")) {
+                  const now = new Date(); // 1. Mira la fecha real de hoy
+                  setState({
+                    currentMonth: now.getMonth(), // 2. Pone el mes actual
+                    currentYear: now.getFullYear(), // 3. Pone el año actual
+                    days: {}, // 4. Limpia los registros
+                    fixedExpenses: state.fixedExpenses, 
+                    defaultInitialCash: 0 
+                  });
                 }
               }} 
             />
