@@ -58,7 +58,6 @@ const App: React.FC = () => {
       setAuthLoading(false);
       
       if (currentUser) {
-        // Si el usuario entra, cargamos sus datos de Firestore
         setLoadingMessage('Sincronizando datos...');
         setLoading(true);
         try {
@@ -66,36 +65,48 @@ const App: React.FC = () => {
           const docSnap = await getDoc(docRef);
           
           if (docSnap.exists()) {
-            const cloudData = docSnap.data() as AppState;
+            const cloudData = docSnap.data(); // Obtenemos datos crudos sin forzar tipo todavía
             
-            // --- CORRECCIÓN DE SEGURIDAD ---
-            // 1. Si fixedExpenses no existe (datos muy viejos), lo creamos desde cero.
-            // Esto evita el error de "propiedad indefinida" que congela la pantalla.
-            if (!cloudData.fixedExpenses) {
-              cloudData.fixedExpenses = { ...INITIAL_FIXED_EXPENSES };
-            }
-
-            // 2. Ahora que es seguro, verificamos cada lista una por una
-            if (!Array.isArray(cloudData.fixedExpenses.payroll)) cloudData.fixedExpenses.payroll = [];
-            if (!Array.isArray(cloudData.fixedExpenses.utilities)) cloudData.fixedExpenses.utilities = [];
+            // --- ESTRATEGIA DE FUSIÓN SEGURA (A PRUEBA DE FALLOS) ---
             
-            // 3. Agregamos las listas nuevas de Proveedores y Bancos
-            if (!Array.isArray(cloudData.fixedExpenses.bankTransactions)) cloudData.fixedExpenses.bankTransactions = [];
-            if (!Array.isArray(cloudData.fixedExpenses.providersOccasional)) cloudData.fixedExpenses.providersOccasional = [];
-            if (!Array.isArray(cloudData.fixedExpenses.providersFormal)) cloudData.fixedExpenses.providersFormal = [];
+            // 1. Creamos un "esqueleto" nuevo y perfecto
+            const safeState: AppState = { ...defaultState };
 
-            // 4. Guardamos en el estado
-            setState(cloudData);
+            // 2. Recuperamos datos básicos si existen
+            if (cloudData.currentMonth !== undefined) safeState.currentMonth = cloudData.currentMonth;
+            if (cloudData.currentYear !== undefined) safeState.currentYear = cloudData.currentYear;
+            if (cloudData.defaultInitialCash !== undefined) safeState.defaultInitialCash = cloudData.defaultInitialCash;
+            if (cloudData.days) safeState.days = cloudData.days;
+
+            // 3. Reconstrucción quirúrgica de FixedExpenses
+            // (Tomamos los valores de la nube, pero si faltan listas, usamos las vacías del nuevo sistema)
+            const cloudFixed = cloudData.fixedExpenses || {};
+            
+            safeState.fixedExpenses = {
+              ...INITIAL_FIXED_EXPENSES, // Cargamos la estructura nueva primero (garantiza que existan providersOccasional, etc)
+              ...cloudFixed,             // Sobreescribimos con los datos viejos (renta, valores antiguos)
+            };
+
+            // 4. Validación final obligatoria de Arrays (Evita que .map() explote)
+            safeState.fixedExpenses.payroll = Array.isArray(cloudFixed.payroll) ? cloudFixed.payroll : [];
+            safeState.fixedExpenses.utilities = Array.isArray(cloudFixed.utilities) ? cloudFixed.utilities : [];
+            
+            // Aquí está la magia: Si en la nube no existen, usamos [] (Array vacío)
+            safeState.fixedExpenses.bankTransactions = Array.isArray(cloudFixed.bankTransactions) ? cloudFixed.bankTransactions : [];
+            safeState.fixedExpenses.providersOccasional = Array.isArray(cloudFixed.providersOccasional) ? cloudFixed.providersOccasional : [];
+            safeState.fixedExpenses.providersFormal = Array.isArray(cloudFixed.providersFormal) ? cloudFixed.providersFormal : [];
+
+            setState(safeState);
           } else {
-            // Usuario nuevo
             setState(defaultState);
           }
         } catch (error) {
           console.error("Error cargando datos:", error);
-          alert("Error de conexión al cargar tus datos.");
+          // En caso de emergencia, cargamos el estado por defecto para que no se quede pegado
+          setState(defaultState);
         } finally {
           setLoading(false);
-          setDataLoaded(true); // Marca que ya estamos listos para guardar cambios
+          setDataLoaded(true); 
         }
       } else {
         setDataLoaded(false);
