@@ -66,20 +66,25 @@ const App: React.FC = () => {
           const docSnap = await getDoc(docRef);
           
           if (docSnap.exists()) {
-            // Si ya tiene datos guardados, los cargamos
             const cloudData = docSnap.data() as AppState;
-              // Migraciones de datos antiguos
-             if (!Array.isArray(cloudData.fixedExpenses?.payroll)) cloudData.fixedExpenses.payroll = [];
-             if (!Array.isArray(cloudData.fixedExpenses?.utilities)) cloudData.fixedExpenses.utilities = [];
+            
+            // --- PASO DE SEGURIDAD 1: Crear fixedExpenses si no existe ---
+            // (Esto evita el crash si el registro es muy antiguo o está vacío)
+            if (!cloudData.fixedExpenses) {
+               cloudData.fixedExpenses = { ...INITIAL_FIXED_EXPENSES };
+            }
+
+            // --- PASO 2: Migraciones de Arrays (Ahora es seguro ejecutarlas) ---
+            if (!Array.isArray(cloudData.fixedExpenses.payroll)) cloudData.fixedExpenses.payroll = [];
+            if (!Array.isArray(cloudData.fixedExpenses.utilities)) cloudData.fixedExpenses.utilities = [];
              
-             // --- NUEVA MIGRACIÓN: Asegurar que existan las listas de proveedores y bancos ---
-             if (!Array.isArray(cloudData.fixedExpenses?.bankTransactions)) cloudData.fixedExpenses.bankTransactions = [];
-             if (!Array.isArray(cloudData.fixedExpenses?.providersOccasional)) cloudData.fixedExpenses.providersOccasional = [];
-             if (!Array.isArray(cloudData.fixedExpenses?.providersFormal)) cloudData.fixedExpenses.providersFormal = [];
+            if (!Array.isArray(cloudData.fixedExpenses.bankTransactions)) cloudData.fixedExpenses.bankTransactions = [];
+            if (!Array.isArray(cloudData.fixedExpenses.providersOccasional)) cloudData.fixedExpenses.providersOccasional = [];
+            if (!Array.isArray(cloudData.fixedExpenses.providersFormal)) cloudData.fixedExpenses.providersFormal = [];
 
             setState(cloudData);
           } else {
-            // Si es usuario nuevo, iniciamos con defaultState
+            // Si es usuario nuevo
             setState(defaultState);
           }
         } catch (error) {
