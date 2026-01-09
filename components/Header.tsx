@@ -1,11 +1,12 @@
 import React from 'react';
-import { ArchiveBoxIcon, ShareIcon } from '@heroicons/react/24/outline';
+import { ArchiveBoxIcon, ShareIcon, ArrowRightOnRectangleIcon } from '@heroicons/react/24/outline';
 
 interface HeaderProps {
   onInstall?: () => void;
+  onLogout?: () => void; // <--- Agrega esta línea
 }
 
-export const Header: React.FC<HeaderProps> = ({ onInstall }) => {
+export const Header: React.FC<HeaderProps> = ({ onInstall, onLogout }) => {
   
   const handleShare = async () => {
     if (navigator.share) {
@@ -49,6 +50,17 @@ export const Header: React.FC<HeaderProps> = ({ onInstall }) => {
                 >
                     INSTALAR APP
                 </button>
+            )}
+          
+            {onLogout && (
+              <button 
+                onClick={onLogout}
+                className="flex items-center gap-2 bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white px-3 py-2 rounded-lg transition-all border border-red-900/30 group"
+                title="Cerrar Sesión"
+              >
+                <ArrowRightOnRectangleIcon className="h-5 w-5 group-hover:scale-110 transition-transform" />
+                <span className="text-xs font-bold uppercase hidden md:inline">Salir</span>
+              </button>
             )}
         </div>
       </div>
