@@ -32,15 +32,17 @@ const App: React.FC = () => {
 
   // --- ESTADO DE LA APP ---
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [loading, setLoading] = <boolean>(false);
-  const [loadingMessage, setLoadingMessage] = <string>('');
-  const [installPrompt, setInstallPrompt] = <any>(null);
-  const [selectedDayNumber, setSelectedDayNumber] = <number>(new Date().getDate());
-  const [hasManuallySelected, setHasManuallySelected] = <boolean>(false);
-  const [editingDay, setEditingDay] = <DayData | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [loadingMessage, setLoadingMessage] = useState<string>('');
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
+
+  // AQUÍ ESTABA EL ERROR (te faltaba 'useState'):
+  const [selectedDayNumber, setSelectedDayNumber] = useState<number>(new Date().getDate());
+  const [hasManuallySelected, setHasManuallySelected] = useState<boolean>(false);
+  const [editingDay, setEditingDay] = useState<DayData | null>(null);
   
-  // --- NUEVO ESTADO PARA EL PIN ---
-  const [isAdmin, setIsAdmin] = (false);
+  // El nuevo estado que agregamos
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const handleAdminUnlock = () => {
     const pin = prompt("Ingrese el PIN de Administrador:");
