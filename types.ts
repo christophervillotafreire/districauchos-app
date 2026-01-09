@@ -36,13 +36,40 @@ export interface ServiceItem {
   amount: number;
 }
 
+// NUEVO: Interfaz para items simples (Bancos y Prov. Ocasionales)
+export interface SimpleExpenseItem {
+  id: string;
+  date: string;       // Guardaremos fecha YYYY-MM-DD
+  description: string;
+  amount: number;
+}
+
+// NUEVO: Interfaz para Proveedores Formales
+export interface ProviderFormalItem {
+  id: string;
+  date: string;
+  company: string;
+  invoiceNumber: string;
+  amount: number;
+}
+
 export interface MonthlyFixedExpenses {
-  utilities: ServiceItem[]; // CAMBIO: Ahora es una lista
+  utilities: ServiceItem[];
   payroll: Employee[];
-  bankLoans: number;
-  suppliers: number;
+  
+  // MODIFICADO: Bancos ahora es una lista detallada
+  bankTransactions: SimpleExpenseItem[]; 
+  
+  // MODIFICADO: Proveedores separado en dos listas
+  providersOccasional: SimpleExpenseItem[];
+  providersFormal: ProviderFormalItem[];
+
   rent: number;
   others: number;
+  
+  // Mantenemos estos para compatibilidad temporal si es necesario, pero los dejaremos de usar visualmente
+  bankLoans?: number; 
+  suppliers?: number; 
 }
 
 export interface AppState {
@@ -54,10 +81,18 @@ export interface AppState {
 }
 
 export const INITIAL_FIXED_EXPENSES: MonthlyFixedExpenses = {
-  utilities: [], // Inicializa como array vacío
+  utilities: [],
   payroll: [],
-  bankLoans: 0,
-  suppliers: 0,
+  
+  // Nuevas listas vacías
+  bankTransactions: [],
+  providersOccasional: [],
+  providersFormal: [],
+
   rent: 0,
-  others: 0
+  others: 0,
+  
+  // Valores legacy en 0
+  bankLoans: 0,
+  suppliers: 0
 };
