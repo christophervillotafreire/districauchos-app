@@ -15,28 +15,41 @@ import {
   ArrowUturnLeftIcon, 
   CreditCardIcon, 
   CurrencyDollarIcon,
-  UserCircleIcon // Nuevo icono
+  UserCircleIcon,
+  LockClosedIcon
 } from '@heroicons/react/24/outline';
 
 // --- FIREBASE IMPORTS ---
 import { auth, googleProvider, db } from './firebaseConfig';
 import { signInWithPopup, onAuthStateChanged, signOut, User } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 
 const App: React.FC = () => {
   // --- ESTADO DE AUTENTICACIÓN ---
   const [user, setUser] = useState<User | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [dataLoaded, setDataLoaded] = useState(false); // Para saber si ya bajamos datos de la nube
+  const [authLoading, setAuthLoading] = (true);
+  const [dataLoaded, setDataLoaded] = (false); // Para saber si ya bajamos datos de la nube
 
   // --- ESTADO DE LA APP ---
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [loadingMessage, setLoadingMessage] = useState<string>('');
-  const [installPrompt, setInstallPrompt] = useState<any>(null);
-  const [selectedDayNumber, setSelectedDayNumber] = useState<number>(new Date().getDate());
-  const [hasManuallySelected, setHasManuallySelected] = useState<boolean>(false);
-  const [editingDay, setEditingDay] = useState<DayData | null>(null);
+  const [loading, setLoading] = <boolean>(false);
+  const [loadingMessage, setLoadingMessage] = <string>('');
+  const [installPrompt, setInstallPrompt] = <any>(null);
+  const [selectedDayNumber, setSelectedDayNumber] = <number>(new Date().getDate());
+  const [hasManuallySelected, setHasManuallySelected] = <boolean>(false);
+  const [editingDay, setEditingDay] = <DayData | null>(null);
+  
+  // --- NUEVO ESTADO PARA EL PIN ---
+  const [isAdmin, setIsAdmin] = (false);
+
+  const handleAdminUnlock = () => {
+    const pin = prompt("Ingrese el PIN de Administrador:");
+    if (pin === "1307") {
+      setIsAdmin(true);
+    } else {
+      alert("PIN Incorrecto");
+    }
+  };
   
   const today = new Date();
 
@@ -49,63 +62,74 @@ const App: React.FC = () => {
     defaultInitialCash: 0 
   };
 
-  const [state, setState] = useState<AppState>(defaultState);
+  const [state, setState] = <AppState>(defaultState);
 
-// 1. ESCUCHAR EL ESTADO DEL USUARIO Y CORREGIR DATOS
+// 1. ESCUCHAR EL ESTADO DEL USUARIO Y SINCRONIZAR EN TIEMPO REAL
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+    let unsubscribeSnapshot: () => void; // Para detener la escucha al salir
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       setAuthLoading(false);
       
       if (currentUser) {
-        setLoadingMessage('Verificando datos...');
         setLoading(true);
-        try {
-          const docRef = doc(db, "users", currentUser.uid);
-          const docSnap = await getDoc(docRef);
-          
+        setLoadingMessage('Sincronizando equipo...');
+        
+        // ACTIVAMOS LA ESCUCHA EN TIEMPO REAL (onSnapshot)
+        const docRef = doc(db, "users", currentUser.uid);
+        
+        unsubscribeSnapshot = onSnapshot(docRef, (docSnap) => {
           if (docSnap.exists()) {
             const cloudData = docSnap.data();
             const cloudFixed = cloudData.fixedExpenses || {};
 
-            // --- DETECTOR DE DATOS VIEJOS ---
-            // Verificamos si la nueva lista "providersFormal" existe y es un Array.
-            // Si NO es un array (es undefined o un número viejo), asumimos que la DB está sucia.
-            const isOldData = !Array.isArray(cloudFixed.providersFormal) || !Array.isArray(cloudFixed.providersOccasional);
+            // Lógica de seguridad para arrays (igual que antes)
+            const sanitizedFixedExpenses = {
+              ...INITIAL_FIXED_EXPENSES,
+              ...cloudFixed,
+              utilities: Array.isArray(cloudFixed.utilities) ? cloudFixed.utilities : [],
+              payroll: Array.isArray(cloudFixed.payroll) ? cloudFixed.payroll : [],
+              bankTransactions: Array.isArray(cloudFixed.bankTransactions) ? cloudFixed.bankTransactions : [],
+              providersOccasional: Array.isArray(cloudFixed.providersOccasional) ? cloudFixed.providersOccasional : [],
+              providersFormal: Array.isArray(cloudFixed.providersFormal) ? cloudFixed.providersFormal : [],
+            };
 
-            if (isOldData) {
-              console.warn("⚠️ Datos incompatibles detectados. Realizando limpieza automática...");
-              // SOBRESCRIBIMOS LA NUBE CON EL ESTADO LIMPIO (defaultState)
-              await setDoc(docRef, defaultState);
-              setState(defaultState);
-            } else {
-              // Si los datos están bien, cargamos normalmente fusionando con seguridad
-              setState({
-                ...defaultState,
-                ...cloudData, // Carga datos básicos (mes, año)
-                days: cloudData.days || {},
-                fixedExpenses: {
-                  ...INITIAL_FIXED_EXPENSES,
-                  ...cloudFixed // Carga los gastos guardados
-                }
-              } as AppState);
-            }
+            const newState: AppState = { 
+              ...defaultState,
+              currentMonth: cloudData.currentMonth ?? defaultState.currentMonth,
+              currentYear: cloudData.currentYear ?? defaultState.currentYear,
+              defaultInitialCash: cloudData.defaultInitialCash ?? defaultState.defaultInitialCash,
+              days: cloudData.days || {},
+              fixedExpenses: sanitizedFixedExpenses
+            };
+
+            // IMPORTANTE: Solo actualizamos si hay cambios para evitar bucles
+            // (React hará el diffing, así que setState es seguro aquí)
+            setState(newState);
+            setDataLoaded(true);
+            setLoading(false);
           } else {
-            // Si no existe documento, creamos uno nuevo
+            // Si es usuario nuevo
+            setDoc(docRef, defaultState);
             setState(defaultState);
+            setLoading(false);
+            setDataLoaded(true);
           }
-        } catch (error) {
-          console.error("Error cargando:", error);
-          setState(defaultState);
-        } finally {
+        }, (error) => {
+          console.error("Error de sincronización:", error);
           setLoading(false);
-          setDataLoaded(true); 
-        }
+        });
+
       } else {
         setDataLoaded(false);
       }
     });
-    return () => unsubscribe();
+
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeSnapshot) unsubscribeSnapshot();
+    };
   }, []);
 
   // 2. GUARDAR EN FIRESTORE CUANDO EL ESTADO CAMBIA
@@ -271,22 +295,42 @@ const App: React.FC = () => {
 
       <main className="container mx-auto max-w-7xl p-4 lg:p-8 space-y-6">
         
-        {/* SECCIÓN 1: Tarjetas */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          <StatCard icon={<BanknotesIcon className="text-green-600"/>} label="Ventas Efect." value={monthlyStats.cashSales} color="bg-green-50" />
-          <StatCard icon={<CreditCardIcon className="text-purple-600"/>} label="Ventas Transf" value={monthlyStats.nequiSales} color="bg-purple-50" />
-          <StatCard icon={<ShoppingBagIcon className="text-red-600"/>} label="Gastos Caja" value={monthlyStats.expenses} color="bg-red-50" />
-          <StatCard icon={<ArrowUturnLeftIcon className="text-orange-600"/>} label="Devoluciones" value={monthlyStats.returns} color="bg-orange-50" />
-          
-          <div className="bg-emerald-600 p-3 rounded-2xl shadow-lg shadow-emerald-100 flex items-center gap-3 text-white col-span-2 md:col-span-1 lg:col-span-1">
-             <div className="bg-emerald-500/30 p-2 rounded-lg"><CurrencyDollarIcon className="h-5 w-5 text-white"/></div>
-             <div className="min-w-0"><p className="text-[10px] font-black text-emerald-200 uppercase">Ganancia Efec.</p><p className="text-sm font-black truncate">{formatCurrency(monthlyCashProfit)}</p></div>
+        {/* SECCIÓN 1: Tarjetas y Panel Admin */}
+        {!isAdmin ? (
+          <div className="bg-slate-900 p-6 rounded-3xl shadow-xl flex flex-col md:flex-row items-center justify-between gap-4 text-white">
+            <div className="flex items-center gap-4">
+               <div className="p-3 bg-slate-800 rounded-2xl">
+                 <LockClosedIcon className="h-8 w-8 text-blue-400" />
+               </div>
+               <div>
+                 <h3 className="font-bold text-lg">Información Financiera Protegida</h3>
+                 <p className="text-slate-400 text-sm">Las ganancias y reportes son visibles solo para el administrador.</p>
+               </div>
+            </div>
+            <button 
+              onClick={handleAdminUnlock}
+              className="px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold text-sm uppercase transition-colors"
+            >
+              Ingresar PIN
+            </button>
           </div>
-          <div className="bg-blue-600 p-3 rounded-2xl shadow-lg shadow-blue-100 flex items-center gap-3 text-white col-span-2 md:col-span-1 lg:col-span-1">
-             <div className="bg-blue-500/30 p-2 rounded-lg"><ScaleIcon className="h-5 w-5 text-white"/></div>
-             <div className="min-w-0"><p className="text-[10px] font-black text-blue-200 uppercase">Ganancia Neta</p><p className="text-sm font-black truncate">{formatCurrency(monthlyGrossProfit)}</p></div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 animate-in fade-in slide-in-from-top-4 duration-500">
+            <StatCard icon={<BanknotesIcon className="text-green-600"/>} label="Ventas Efect." value={monthlyStats.cashSales} color="bg-green-50" />
+            <StatCard icon={<CreditCardIcon className="text-purple-600"/>} label="Ventas Transf" value={monthlyStats.nequiSales} color="bg-purple-50" />
+            <StatCard icon={<ShoppingBagIcon className="text-red-600"/>} label="Gastos Caja" value={monthlyStats.expenses} color="bg-red-50" />
+            <StatCard icon={<ArrowUturnLeftIcon className="text-orange-600"/>} label="Devoluciones" value={monthlyStats.returns} color="bg-orange-50" />
+            
+            <div className="bg-emerald-600 p-3 rounded-2xl shadow-lg shadow-emerald-100 flex items-center gap-3 text-white col-span-2 md:col-span-1 lg:col-span-1">
+              <div className="bg-emerald-500/30 p-2 rounded-lg"><CurrencyDollarIcon className="h-5 w-5 text-white"/></div>
+              <div className="min-w-0"><p className="text-[10px] font-black text-emerald-200 uppercase">Ganancia Efec.</p><p className="text-sm font-black truncate">{formatCurrency(monthlyCashProfit)}</p></div>
+            </div>
+            <div className="bg-blue-600 p-3 rounded-2xl shadow-lg shadow-blue-100 flex items-center gap-3 text-white col-span-2 md:col-span-1 lg:col-span-1">
+              <div className="bg-blue-500/30 p-2 rounded-lg"><ScaleIcon className="h-5 w-5 text-white"/></div>
+              <div className="min-w-0"><p className="text-[10px] font-black text-blue-200 uppercase">Ganancia Neta</p><p className="text-sm font-black truncate">{formatCurrency(monthlyGrossProfit)}</p></div>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* SECCIÓN 2: Layout Principal */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -376,8 +420,12 @@ const App: React.FC = () => {
 
           </div>
         </div>
+        
+{/* SECCIÓN: Cierre de Mes (Protegido con PIN) */}
         <div className="w-full mt-6">
-          <MonthlySummary 
+          {isAdmin ? (
+            /* SI ES ADMIN: Muestra el componente completo */
+            <MonthlySummary 
               expenses={state.fixedExpenses} 
               defaultBase={state.defaultInitialCash} 
               onChange={(ex) => setState(p => ({...p, fixedExpenses: ex}))} 
@@ -396,19 +444,31 @@ const App: React.FC = () => {
                 }
               }} 
             />
+          ) : (
+            /* SI NO ES ADMIN: Muestra aviso de bloqueo */
+            <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl p-8 text-center animate-in fade-in">
+               <div className="inline-flex bg-slate-200 p-3 rounded-full mb-3">
+                 <LockClosedIcon className="h-6 w-6 text-slate-400" />
+               </div>
+               <p className="text-slate-500 font-bold text-sm">El panel de Gastos Fijos y Proveedores está protegido.</p>
+               <p className="text-slate-400 text-xs mt-1">Ingresa el PIN de administrador arriba para desbloquear.</p>
+            </div>
+          )}
         </div>
 
       </main>
 
-
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 shadow-[0_-10px_30px_rgba(0,0,0,0.08)] z-40">
-        <div className="container mx-auto max-w-7xl flex justify-end">
-           <button onClick={handleExport} disabled={Object.keys(state.days).length === 0} className={`px-8 py-3 rounded-xl font-black text-white transition-all uppercase text-xs tracking-widest flex items-center gap-3 ${Object.keys(state.days).length === 0 ? 'bg-slate-200 text-slate-400' : 'bg-slate-900 hover:bg-black shadow-xl shadow-slate-200 active:scale-95'}`}>
-             <ArrowUpTrayIcon className="h-5 w-5 stroke-[3]" />
-             Exportar Excel Contable
-           </button>
+      {/* Botón de Exportar Excel (Solo visible si es Admin) */}
+      {isAdmin && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 shadow-[0_-10px_30px_rgba(0,0,0,0.08)] z-40 animate-in slide-in-from-bottom-full duration-500">
+          <div className="container mx-auto max-w-7xl flex justify-end">
+             <button onClick={handleExport} disabled={Object.keys(state.days).length === 0} className={`px-8 py-3 rounded-xl font-black text-white transition-all uppercase text-xs tracking-widest flex items-center gap-3 ${Object.keys(state.days).length === 0 ? 'bg-slate-200 text-slate-400' : 'bg-slate-900 hover:bg-black shadow-xl shadow-slate-200 active:scale-95'}`}>
+               <ArrowUpTrayIcon className="h-5 w-5 stroke-[3]" />
+               Exportar Excel Contable
+             </button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
