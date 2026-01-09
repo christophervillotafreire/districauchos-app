@@ -3,7 +3,7 @@ import { MonthlyFixedExpenses, Employee, ServiceItem, SimpleExpenseItem, Provide
 import { 
   TrashIcon, CurrencyDollarIcon, UserGroupIcon, PlusIcon, BoltIcon, 
   BuildingLibraryIcon, TruckIcon, XMarkIcon, CalendarDaysIcon, 
-  DocumentTextIcon, BuildingStorefrontIcon 
+  DocumentTextIcon, BuildingStorefrontIcon, ShoppingBagIcon 
 } from '@heroicons/react/24/outline';
 
 interface MonthlySummaryProps {
