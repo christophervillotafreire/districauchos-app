@@ -68,23 +68,26 @@ const App: React.FC = () => {
           if (docSnap.exists()) {
             const cloudData = docSnap.data() as AppState;
             
-            // --- PASO DE SEGURIDAD 1: Crear fixedExpenses si no existe ---
-            // (Esto evita el crash si el registro es muy antiguo o está vacío)
+            // --- CORRECCIÓN DE SEGURIDAD ---
+            // 1. Si fixedExpenses no existe (datos muy viejos), lo creamos desde cero.
+            // Esto evita el error de "propiedad indefinida" que congela la pantalla.
             if (!cloudData.fixedExpenses) {
-               cloudData.fixedExpenses = { ...INITIAL_FIXED_EXPENSES };
+              cloudData.fixedExpenses = { ...INITIAL_FIXED_EXPENSES };
             }
 
-            // --- PASO 2: Migraciones de Arrays (Ahora es seguro ejecutarlas) ---
+            // 2. Ahora que es seguro, verificamos cada lista una por una
             if (!Array.isArray(cloudData.fixedExpenses.payroll)) cloudData.fixedExpenses.payroll = [];
             if (!Array.isArray(cloudData.fixedExpenses.utilities)) cloudData.fixedExpenses.utilities = [];
-             
+            
+            // 3. Agregamos las listas nuevas de Proveedores y Bancos
             if (!Array.isArray(cloudData.fixedExpenses.bankTransactions)) cloudData.fixedExpenses.bankTransactions = [];
             if (!Array.isArray(cloudData.fixedExpenses.providersOccasional)) cloudData.fixedExpenses.providersOccasional = [];
             if (!Array.isArray(cloudData.fixedExpenses.providersFormal)) cloudData.fixedExpenses.providersFormal = [];
 
+            // 4. Guardamos en el estado
             setState(cloudData);
           } else {
-            // Si es usuario nuevo
+            // Usuario nuevo
             setState(defaultState);
           }
         } catch (error) {
