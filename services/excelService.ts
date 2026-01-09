@@ -12,7 +12,7 @@ export const generateMonthlyReport = (state: AppState) => {
   let totalDailyExpenses = 0;
   let totalBaseInMonth = 0;
 
-  // --- 1. Generar Hojas Diarias (Sin Cambios) ---
+  // --- 1. Generar Hojas Diarias (Sin Cambios significativos) ---
   const daysInMonth = new Date(state.currentYear, state.currentMonth + 1, 0).getDate();
   for (let i = 1; i <= daysInMonth; i++) {
     const dayData = state.days[i];
@@ -70,10 +70,10 @@ export const generateMonthlyReport = (state: AppState) => {
     XLSX.utils.book_append_sheet(wb, ws, `Día ${i}`);
   }
 
-  // --- 2. Hoja de Resumen Mensual ---
+  // --- 2. Hoja de Resumen Mensual (AQUÍ ESTÁ LA MAGIA NUEVA) ---
   const { fixedExpenses } = state;
 
-  // A. CALCULO NÓMINA (Array)
+  // A. CALCULO NÓMINA
   let totalPayroll = 0;
   const payrollRows: (string | number)[][] = [];
   if (Array.isArray(fixedExpenses.payroll)) {
@@ -82,11 +82,9 @@ export const generateMonthlyReport = (state: AppState) => {
       totalPayroll += val;
       if (val > 0) payrollRows.push([`      ↳ Empleado: ${emp.name}`, val, "Pago de Nómina"]);
     });
-  } else {
-    totalPayroll = Number(fixedExpenses.payroll) || 0;
   }
 
-  // B. CALCULO SERVICIOS (Array) - NUEVO
+  // B. CALCULO SERVICIOS
   let totalUtilities = 0;
   const utilityRows: (string | number)[][] = [];
   if (Array.isArray(fixedExpenses.utilities)) {
@@ -95,23 +93,52 @@ export const generateMonthlyReport = (state: AppState) => {
       totalUtilities += val;
       if (val > 0) utilityRows.push([`      ↳ Servicio: ${item.name}`, val, "Servicios Públicos"]);
     });
-  } else {
-    totalUtilities = Number(fixedExpenses.utilities) || 0;
   }
 
-  const fE = {
-    utilities: totalUtilities, // Total Calculado
-    payroll: totalPayroll,     // Total Calculado
-    bankLoans: Number(fixedExpenses.bankLoans) || 0,
-    suppliers: Number(fixedExpenses.suppliers) || 0,
-    rent: Number(fixedExpenses.rent) || 0,
-    others: Number(fixedExpenses.others) || 0,
-  };
+  // C. CALCULO BANCOS (NUEVO)
+  let totalBanks = 0;
+  const bankRows: (string | number)[][] = [];
+  if (Array.isArray(fixedExpenses.bankTransactions)) {
+    fixedExpenses.bankTransactions.forEach(item => {
+      const val = Number(item.amount) || 0;
+      totalBanks += val;
+      // Formato: [Fecha] Descripción
+      bankRows.push([`      ↳ [${item.date}] ${item.description}`, val, "Obligación Bancaria"]);
+    });
+  }
 
-  const totalFixedExpenses = fE.utilities + fE.payroll + fE.bankLoans + fE.suppliers + fE.rent + fE.others;
+  // D. CALCULO PROVEEDORES (NUEVO - COMBINADO)
+  let totalProviders = 0;
+  const providerRows: (string | number)[][] = [];
+
+  // D1. Ocasionales
+  if (Array.isArray(fixedExpenses.providersOccasional)) {
+    fixedExpenses.providersOccasional.forEach(item => {
+      const val = Number(item.amount) || 0;
+      totalProviders += val;
+      providerRows.push([`      ↳ [${item.date}] Ambulante: ${item.description}`, val, "Proveedor Ocasional"]);
+    });
+  }
+
+  // D2. Formales
+  if (Array.isArray(fixedExpenses.providersFormal)) {
+    fixedExpenses.providersFormal.forEach(item => {
+      const val = Number(item.amount) || 0;
+      totalProviders += val;
+      providerRows.push([`      ↳ [${item.date}] ${item.company} (Fact: ${item.invoiceNumber})`, val, "Proveedor Formal"]);
+    });
+  }
+
+
+  // E. TOTALES FINALES
+  const rentVal = Number(fixedExpenses.rent) || 0;
+  const othersVal = Number(fixedExpenses.others) || 0;
+
+  const totalFixedExpenses = totalUtilities + totalPayroll + totalBanks + totalProviders + rentVal + othersVal;
+  
   const totalOperatingIncome = (totalSalesCash + totalSalesNequi);
   const netProfit = totalOperatingIncome - totalReturns - totalDailyExpenses - totalFixedExpenses;
-  const cashProfit = totalSalesCash - totalReturns - totalDailyExpenses;
+  const cashProfit = totalSalesCash - totalReturns - totalDailyExpenses; // Flujo de caja operativo simple
 
   // CONSTRUCCIÓN TABLA RESUMEN
   const summaryData: (string | number)[][] = [
@@ -131,21 +158,38 @@ export const generateMonthlyReport = (state: AppState) => {
     ["   (=) GANANCIA EN EFECTIVO", cashProfit, "Flujo de dinero físico del mes"],
     [],
     ["3. GASTOS FIJOS DEL MES"],
-    // Servicios
-    ["   --- SERVICIOS PÚBLICOS ---", fE.utilities],
   ];
+  
+  // Insertar filas dinámicas
+  
+  // Servicios
+  summaryData.push(["   --- SERVICIOS PÚBLICOS ---", totalUtilities]);
   utilityRows.forEach(r => summaryData.push(r));
 
   // Nómina
-  summaryData.push(["   --- NÓMINA ---", fE.payroll]);
+  summaryData.push(["   --- NÓMINA ---", totalPayroll]);
   payrollRows.forEach(r => summaryData.push(r));
 
-  // Resto de gastos
+  // Bancos (Nuevo Bloque)
+  summaryData.push(["   --- OBLIGACIONES BANCARIAS ---", totalBanks]);
+  if(bankRows.length > 0) {
+      bankRows.forEach(r => summaryData.push(r));
+  } else {
+      summaryData.push(["      (Sin registros)", 0]);
+  }
+
+  // Proveedores (Nuevo Bloque)
+  summaryData.push(["   --- PROVEEDORES (Mercancía) ---", totalProviders]);
+  if(providerRows.length > 0) {
+      providerRows.forEach(r => summaryData.push(r));
+  } else {
+      summaryData.push(["      (Sin registros)", 0]);
+  }
+
+  // Otros Gastos Simples
   summaryData.push(
-    ["   Arriendo", fE.rent],
-    ["   Obligaciones Bancarias", fE.bankLoans],
-    ["   Proveedores", fE.suppliers],
-    ["   Otros Gastos", fE.others],
+    ["   Arriendo Local", rentVal],
+    ["   Otros Gastos Varios", othersVal],
     [],
     ["   TOTAL GASTOS FIJOS", totalFixedExpenses],
     [],
