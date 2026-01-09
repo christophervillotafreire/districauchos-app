@@ -234,13 +234,10 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen pb-44 bg-slate-50 font-sans lg:text-lg">
       {/* Modificación en Header para Logout */}
-      <div className="flex justify-between items-center p-4 bg-white border-b border-slate-200 lg:px-8">
-         <Header onInstall={installPrompt ? () => installPrompt.prompt() : undefined} />
-         <button onClick={handleLogout} className="text-xs font-bold text-red-500 hover:text-red-700 uppercase flex flex-col items-center">
-            <UserCircleIcon className="h-6 w-6 mb-1"/>
-            Salir
-         </button>
-      </div>
+      <Header
+        onInstall={installPrompt ? () => installPrompt.prompt() : undefined}
+        onLogout={handleLogout}
+      />
 
       <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept="image/*,application/pdf" multiple className="hidden" />
 
