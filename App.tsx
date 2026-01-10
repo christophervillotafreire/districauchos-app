@@ -416,7 +416,7 @@ const App: React.FC = () => {
                       <span className="block text-[10px] text-indigo-700 font-black uppercase tracking-widest">Efectivo Neto del Día</span>
                       <span className="text-xs text-indigo-600 font-medium">(Ventas Efec. - Egresos) sin base</span>
                     </div>
-                    <span className="text-xl font-black text-indigo-700">{formatCurrency(dayNetCashGenerated)}</span>
+                    <span className="text-xl font-black text-indigo-600">{formatCurrency(dayNetCashGenerated)}</span>
                   </div>
                   
                   <div className="flex justify-between items-center bg-blue-50 p-4 rounded-2xl border border-blue-100">
