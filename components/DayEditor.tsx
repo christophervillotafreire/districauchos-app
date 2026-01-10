@@ -40,6 +40,7 @@ export const DayEditor: React.FC<DayEditorProps> = ({ dayData, defaultBase, onSa
     }).format(val || 0);
   };
 
+  // --- CÁLCULOS ---
   const cashSales = transactions.filter(t => t.type === TransactionType.CASH_SALE).reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
   const nequiSales = transactions.filter(t => t.type === TransactionType.NEQUI_SALE).reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
   const returns = transactions.filter(t => t.type === TransactionType.RETURN).reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
@@ -150,7 +151,7 @@ export const DayEditor: React.FC<DayEditorProps> = ({ dayData, defaultBase, onSa
         </button>
       </div>
 
-      {/* BLOQUE CORREGIDO: FOOTER CON 3 DATOS */}
+      {/* BLOQUE FOOTER ACTUALIZADO */}
       <div className="bg-slate-900 p-5 pb-safe-bottom text-white flex flex-col gap-4 shadow-[0_-5px_20px_rgba(0,0,0,0.2)]">
         
         {/* 1. TOTAL EN CAJA (Verde) */}
@@ -162,14 +163,14 @@ export const DayEditor: React.FC<DayEditorProps> = ({ dayData, defaultBase, onSa
           <span className="text-2xl lg:text-3xl font-black text-green-400 tracking-tight">{formatCurrency(netCaja)}</span>
         </div>
 
-        {/* 2. NUEVO: EFECTIVO NETO GENERADO (Índigo/Violeta) */}
+        {/* 2. NUEVO: EFECTIVO NETO GENERADO (Índigo/Violeta) - CORREGIDO */}
         <div className="flex justify-between items-center border-b border-slate-700 pb-3">
           <div className="flex flex-col">
             <span className="text-xs lg:text-sm font-black text-indigo-400 uppercase tracking-widest">Efectivo Neto</span>
             <span className="text-[10px] lg:text-xs text-slate-400 font-medium">(Ventas Efec. - Gastos - Devol.)</span>
           </div>
           <span className="text-xl lg:text-2xl font-bold text-indigo-400 tracking-tight">
-            {formatCurrency(stats.cashSales - stats.returns - stats.dailyExpenses)}
+            {formatCurrency(cashSales - returns - dailyExpenses)}
           </span>
         </div>
 
