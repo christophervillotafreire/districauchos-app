@@ -203,6 +203,7 @@ const App: React.FC = () => {
 
   const currentDayBase = selectedDayData ? (selectedDayData.initialCash ?? state.defaultInitialCash) : state.defaultInitialCash;
   const dayNetCaja = currentDayBase + dayStats.cashSales - dayStats.returns - dayStats.expenses;
+  const dayNetCashGenerated = dayStats.cashSales - dayStats.returns - dayStats.expenses;
   const dayTotalProfit = (dayStats.cashSales + dayStats.nequiSales) - dayStats.returns - dayStats.expenses;
 
   // --- HANDLERS ---
@@ -405,9 +406,17 @@ const App: React.FC = () => {
                   <div className="flex justify-between items-center bg-green-50 p-4 rounded-2xl border border-green-100">
                     <div>
                       <span className="block text-[10px] text-green-700 font-black uppercase tracking-widest">Saldo Físico en Caja</span>
-                      <span className="text-xs text-green-600 font-medium">Debe haber en billetes</span>
+                      <span className="text-xs text-green-600 font-medium">Debe haber en la caja</span>
                     </div>
                     <span className="text-xl font-black text-green-700">{formatCurrency(dayNetCaja)}</span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center bg-indigo-50 p-4 rounded-2xl border border-indigo-100">
+                    <div>
+                      <span className="block text-[10px] text-indigo-700 font-black uppercase tracking-widest">Efectivo Neto del Día</span>
+                      <span className="text-xs text-indigo-600 font-medium">(Ventas Efec. - Egresos) sin base</span>
+                    </div>
+                    <span className="text-xl font-black text-indigo-700">{formatCurrency(dayNetCashGenerated)}</span>
                   </div>
                   
                   <div className="flex justify-between items-center bg-blue-50 p-4 rounded-2xl border border-blue-100">
