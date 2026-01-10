@@ -154,14 +154,14 @@ export const DayEditor: React.FC<DayEditorProps> = ({ dayData, defaultBase, onSa
       <div className="bg-slate-900 p-5 pb-safe-bottom text-white flex flex-col gap-4 shadow-[0_-5px_20px_rgba(0,0,0,0.2)]">
         <div className="flex justify-between items-center border-b border-slate-700 pb-3">
           <div className="flex flex-col">
-            <span className="text-xs lg:text-sm font-black text-green-400 uppercase tracking-widest">Efectivo Físico Esperado</span>
+            <span className="text-xs lg:text-sm font-black text-green-400 uppercase tracking-widest">Total en la Caja</span>
             <span className="text-[10px] lg:text-xs text-slate-400 font-medium">(Base + Efectivo - Egresos)</span>
           </div>
           <span className="text-2xl lg:text-3xl font-black text-green-400 tracking-tight">{formatCurrency(netCaja)}</span>
         </div>
         <div className="flex justify-between items-center opacity-90">
           <div className="flex flex-col">
-            <span className="text-xs lg:text-sm font-black text-blue-300 uppercase tracking-widest">Ganancia Operativa Día</span>
+            <span className="text-xs lg:text-sm font-black text-blue-300 uppercase tracking-widest">Utilidades del Día</span>
             <span className="text-[10px] lg:text-xs text-slate-400 font-medium">(Todas las Ventas - Egresos)</span>
           </div>
           <span className="text-xl lg:text-2xl font-bold text-blue-300 tracking-tight">{formatCurrency(totalProfit)}</span>
