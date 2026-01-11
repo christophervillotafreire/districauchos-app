@@ -29,9 +29,10 @@ import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 
 // --- CONFIGURACIÓN DE USUARIOS (Hardcoded por seguridad local) ---
 const APP_USERS: AppUser[] = [
-  { id: 'admin_01', name: 'Administrador', pin: '1307', role: 'admin' },
-  { id: 'emp_01', name: 'Juan Vendedor', pin: '1111', role: 'employee' },
-  { id: 'emp_02', name: 'Maria Caja', pin: '2222', role: 'employee' },
+  { id: 'admin_01', name: 'Carlos', pin: '1307', role: 'admin' },
+  { id: 'emp_01', name: 'Jhosept', pin: '0308', role: 'employee' },
+  { id: 'emp_02', name: 'Anderson', pin: '0408', role: 'employee' },
+  { id: 'emp_02', name: 'David', pin: '1412', role: 'employee' },
 ];
 
 const App: React.FC = () => {
