@@ -1,15 +1,20 @@
 import React, { useState } from 'react';
-import { Transaction, TransactionType, DayData } from '../types';
-import { TrashIcon, PlusIcon, XMarkIcon, BanknotesIcon, CreditCardIcon, ArrowUturnLeftIcon, ShoppingBagIcon, CurrencyDollarIcon } from '@heroicons/react/24/outline';
+// Agregamos AppUser a los imports
+import { Transaction, TransactionType, DayData, AppUser } from '../types';
+import { 
+  TrashIcon, PlusIcon, XMarkIcon, BanknotesIcon, CreditCardIcon, 
+  ArrowUturnLeftIcon, ShoppingBagIcon, CurrencyDollarIcon, UserIcon 
+} from '@heroicons/react/24/outline';
 
 interface DayEditorProps {
   dayData: DayData;
   defaultBase: number;
   onSave: (data: DayData) => void;
   onCancel: () => void;
+  activeUser: AppUser | null; // <--- NUEVA PROP REQUERIDA
 }
 
-export const DayEditor: React.FC<DayEditorProps> = ({ dayData, defaultBase, onSave, onCancel }) => {
+export const DayEditor: React.FC<DayEditorProps> = ({ dayData, defaultBase, onSave, onCancel, activeUser }) => {
   const [transactions, setTransactions] = useState<Transaction[]>(dayData.transactions || []);
   const [initialCash, setInitialCash] = useState<number>(dayData.initialCash ?? defaultBase);
   const [activeTab, setActiveTab] = useState<'income' | 'expense'>('income');
@@ -23,7 +28,8 @@ export const DayEditor: React.FC<DayEditorProps> = ({ dayData, defaultBase, onSa
       id: Math.random().toString(36).substr(2, 9),
       description: '',
       amount: 0,
-      type: activeTab === 'income' ? TransactionType.CASH_SALE : TransactionType.DAILY_EXPENSE
+      type: activeTab === 'income' ? TransactionType.CASH_SALE : TransactionType.DAILY_EXPENSE,
+      createdBy: activeUser?.name // <--- AQUI SE FIRMA LA TRANSACCIÓN
     };
     setTransactions([...transactions, newTx]);
   };
@@ -127,20 +133,33 @@ export const DayEditor: React.FC<DayEditorProps> = ({ dayData, defaultBase, onSa
                   className="col-span-5 lg:col-span-3 w-full p-3 bg-slate-50 border border-slate-200 rounded-lg text-base lg:text-lg font-bold text-right outline-none focus:border-blue-300 focus:bg-white transition-colors" 
                 />
               </div>
+              
               <div className="flex justify-between items-center">
-                <select value={t.type} onChange={(e) => updateTransaction(t.id, 'type', e.target.value)} className="text-[10px] font-bold bg-slate-100 p-1.5 rounded-lg border-none text-slate-600 uppercase">
-                  {activeTab === 'income' ? (
-                    <>
-                      <option value={TransactionType.CASH_SALE}>VENTA EFECTIVO</option>
-                      <option value={TransactionType.NEQUI_SALE}>VENTA TRANSFERENCIA</option>
-                    </>
-                  ) : (
-                    <>
-                      <option value={TransactionType.DAILY_EXPENSE}>GASTO DIARIO</option>
-                      <option value={TransactionType.RETURN}>DEVOLUCIÓN</option>
-                    </>
-                  )}
-                </select>
+                <div className="flex items-center gap-2">
+                  <select value={t.type} onChange={(e) => updateTransaction(t.id, 'type', e.target.value)} className="text-[10px] font-bold bg-slate-100 p-1.5 rounded-lg border-none text-slate-600 uppercase">
+                    {activeTab === 'income' ? (
+                      <>
+                        <option value={TransactionType.CASH_SALE}>VENTA EFECTIVO</option>
+                        <option value={TransactionType.NEQUI_SALE}>VENTA TRANSFERENCIA</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value={TransactionType.DAILY_EXPENSE}>GASTO DIARIO</option>
+                        <option value={TransactionType.RETURN}>DEVOLUCIÓN</option>
+                      </>
+                    )}
+                  </select>
+                  
+                  {/* --- NUEVO: BADGE DE AUDITORÍA --- */}
+                  <div className="flex items-center gap-1 bg-slate-100 px-2 py-1 rounded-md border border-slate-200">
+                    <UserIcon className="h-3 w-3 text-slate-400" />
+                    <span className="text-[9px] font-bold text-slate-500 uppercase truncate max-w-[80px]">
+                      {t.createdBy || 'Sistema'}
+                    </span>
+                  </div>
+                  {/* -------------------------------- */}
+                </div>
+
                 <button onClick={() => handleDelete(t.id)} className="text-slate-300 hover:text-red-500 p-1"><TrashIcon className="h-5 w-5" /></button>
               </div>
             </div>
@@ -163,7 +182,7 @@ export const DayEditor: React.FC<DayEditorProps> = ({ dayData, defaultBase, onSa
           <span className="text-2xl lg:text-3xl font-black text-green-400 tracking-tight">{formatCurrency(netCaja)}</span>
         </div>
 
-        {/* 2. NUEVO: EFECTIVO NETO GENERADO (Índigo/Violeta) - CORREGIDO */}
+        {/* 2. EFECTIVO NETO GENERADO (Índigo/Violeta) */}
         <div className="flex justify-between items-center border-b border-slate-700 pb-3">
           <div className="flex flex-col">
             <span className="text-xs lg:text-sm font-black text-indigo-400 uppercase tracking-widest">Efectivo Neto</span>
