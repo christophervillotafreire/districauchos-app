@@ -1,5 +1,14 @@
 // types.ts
 
+// --- NUEVO: Interfaz para el Usuario de la Sesión (Login) ---
+export interface AppUser {
+  id: string;
+  name: string;
+  pin: string;
+  role: 'admin' | 'employee';
+}
+// -----------------------------------------------------------
+
 export enum TransactionType {
   CASH_SALE = 'Venta Efectivo',
   NEQUI_SALE = 'Venta Nequi',
@@ -12,16 +21,17 @@ export interface Transaction {
   description: string;
   amount: number;
   type: TransactionType;
+  createdBy?: string; // <--- NUEVO: Auditoría (Opcional para no romper datos viejos)
 }
 
 export interface DayData {
   day: number; // 1-31
   transactions: Transaction[];
   hasData: boolean;
-  initialCash?: number; // Base de caja del día
+  initialCash?: number; 
 }
 
-// Interfaz para Empleados (Nómina)
+// Interfaz para Empleados (Nómina) - SE MANTIENE IGUAL PARA NO ROMPER PAGO DE NOMINA
 export interface Employee {
   id: string;
   name: string;
@@ -29,45 +39,48 @@ export interface Employee {
   paymentQ2: number;
 }
 
-// NUEVA INTERFAZ: Para Servicios Públicos
+// Para Servicios Públicos
 export interface ServiceItem {
   id: string;
   name: string;
   amount: number;
+  createdBy?: string; // <--- NUEVO: Auditoría
 }
 
-// NUEVO: Interfaz para items simples (Bancos y Prov. Ocasionales)
+// Interfaz para items simples (Bancos y Prov. Ocasionales)
 export interface SimpleExpenseItem {
   id: string;
-  date: string;       // Guardaremos fecha YYYY-MM-DD
+  date: string;       
   description: string;
   amount: number;
+  createdBy?: string; // <--- NUEVO: Auditoría
 }
 
-// NUEVO: Interfaz para Proveedores Formales
+// Interfaz para Proveedores Formales
 export interface ProviderFormalItem {
   id: string;
   date: string;
   company: string;
   invoiceNumber: string;
   amount: number;
+  createdBy?: string; // <--- NUEVO: Auditoría
 }
 
 export interface MonthlyFixedExpenses {
   utilities: ServiceItem[];
   payroll: Employee[];
   
-  // MODIFICADO: Bancos ahora es una lista detallada
+  // Bancos ahora es una lista detallada
   bankTransactions: SimpleExpenseItem[]; 
   
-  // MODIFICADO: Proveedores separado en dos listas
+  // Proveedores separado en dos listas
   providersOccasional: SimpleExpenseItem[];
   providersFormal: ProviderFormalItem[];
 
   rent: number;
   others: number;
   
-  // Mantenemos estos para compatibilidad temporal si es necesario, pero los dejaremos de usar visualmente
+  // Legacy
   bankLoans?: number; 
   suppliers?: number; 
 }
@@ -84,7 +97,6 @@ export const INITIAL_FIXED_EXPENSES: MonthlyFixedExpenses = {
   utilities: [],
   payroll: [],
   
-  // Nuevas listas vacías
   bankTransactions: [],
   providersOccasional: [],
   providersFormal: [],
@@ -92,7 +104,6 @@ export const INITIAL_FIXED_EXPENSES: MonthlyFixedExpenses = {
   rent: 0,
   others: 0,
   
-  // Valores legacy en 0
   bankLoans: 0,
   suppliers: 0
 };
