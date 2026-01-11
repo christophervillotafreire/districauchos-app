@@ -32,7 +32,7 @@ const APP_USERS: AppUser[] = [
   { id: 'admin_01', name: 'Carlos', pin: '1307', role: 'admin' },
   { id: 'emp_01', name: 'Jhosept', pin: '0308', role: 'employee' },
   { id: 'emp_02', name: 'Anderson', pin: '0408', role: 'employee' },
-  { id: 'emp_02', name: 'David', pin: '1412', role: 'employee' },
+  { id: 'emp_03', name: 'David', pin: '1412', role: 'employee' },
 ];
 
 const App: React.FC = () => {
