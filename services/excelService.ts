@@ -12,7 +12,7 @@ export const generateMonthlyReport = (state: AppState) => {
   let totalDailyExpenses = 0;
   let totalBaseInMonth = 0;
 
-  // --- 1. Generar Hojas Diarias (Sin Cambios significativos) ---
+  // --- 1. Generar Hojas Diarias ---
   const daysInMonth = new Date(state.currentYear, state.currentMonth + 1, 0).getDate();
   for (let i = 1; i <= daysInMonth; i++) {
     const dayData = state.days[i];
@@ -24,7 +24,8 @@ export const generateMonthlyReport = (state: AppState) => {
       [],
       [`BASE DE CAJA INICIAL:`, dayBase],
       [],
-      ["Descripción", "Tipo", "Efectivo (+)", "Transferencia (+)", "Egresos (-)"]
+      // NUEVA COLUMNA AL FINAL: "Responsable"
+      ["Descripción", "Tipo", "Efectivo (+)", "Transferencia (+)", "Egresos (-)", "Responsable"]
     ];
 
     let dayCash = 0;
@@ -46,7 +47,15 @@ export const generateMonthlyReport = (state: AppState) => {
           case TransactionType.DAILY_EXPENSE: egreso = amt; dayExpense += amt; break;
         }
 
-        wsData.push([t.description || "Varios", t.type, cashIn || "", transferIn || "", egreso || ""]);
+        // AQUÍ AGREGAMOS t.createdBy || "Sistema"
+        wsData.push([
+          t.description || "Varios", 
+          t.type, 
+          cashIn || "", 
+          transferIn || "", 
+          egreso || "",
+          t.createdBy || "Sistema" // <--- DATO DE AUDITORÍA
+        ]);
       });
       totalBaseInMonth += dayBase;
     }
@@ -61,6 +70,16 @@ export const generateMonthlyReport = (state: AppState) => {
     wsData.push(["UTILIDAD DEL DÍA (TOTAL)", "", (dayCash + dayNequi - dayReturns - dayExpense)]);
 
     const ws = XLSX.utils.aoa_to_sheet(wsData);
+    
+    // Ajustar ancho de columnas para que se vea bien
+    ws['!cols'] = [
+      { wch: 30 }, // Descripción
+      { wch: 20 }, // Tipo
+      { wch: 15 }, // Efec
+      { wch: 15 }, // Transf
+      { wch: 15 }, // Egresos
+      { wch: 20 }  // Responsable
+    ];
 
     totalSalesCash += dayCash;
     totalSalesNequi += dayNequi;
@@ -70,7 +89,7 @@ export const generateMonthlyReport = (state: AppState) => {
     XLSX.utils.book_append_sheet(wb, ws, `Día ${i}`);
   }
 
-  // --- 2. Hoja de Resumen Mensual (AQUÍ ESTÁ LA MAGIA NUEVA) ---
+  // --- 2. Hoja de Resumen Mensual ---
   const { fixedExpenses } = state;
 
   // A. CALCULO NÓMINA
@@ -80,34 +99,43 @@ export const generateMonthlyReport = (state: AppState) => {
     fixedExpenses.payroll.forEach(emp => {
       const val = (Number(emp.paymentQ1)||0) + (Number(emp.paymentQ2)||0);
       totalPayroll += val;
-      if (val > 0) payrollRows.push([`      ↳ Empleado: ${emp.name}`, val, "Pago de Nómina"]);
+      if (val > 0) payrollRows.push([`      ↳ Empleado: ${emp.name}`, val, "Pago de Nómina", "Admin"]);
     });
   }
 
-  // B. CALCULO SERVICIOS
+  // B. CALCULO SERVICIOS (Con Responsable)
   let totalUtilities = 0;
   const utilityRows: (string | number)[][] = [];
   if (Array.isArray(fixedExpenses.utilities)) {
     fixedExpenses.utilities.forEach(item => {
       const val = Number(item.amount) || 0;
       totalUtilities += val;
-      if (val > 0) utilityRows.push([`      ↳ Servicio: ${item.name}`, val, "Servicios Públicos"]);
+      if (val > 0) utilityRows.push([
+        `      ↳ Servicio: ${item.name}`, 
+        val, 
+        "Servicios Públicos",
+        item.createdBy || "Sistema" // <--- AUDITORÍA
+      ]);
     });
   }
 
-  // C. CALCULO BANCOS (NUEVO)
+  // C. CALCULO BANCOS (Con Responsable)
   let totalBanks = 0;
   const bankRows: (string | number)[][] = [];
   if (Array.isArray(fixedExpenses.bankTransactions)) {
     fixedExpenses.bankTransactions.forEach(item => {
       const val = Number(item.amount) || 0;
       totalBanks += val;
-      // Formato: [Fecha] Descripción
-      bankRows.push([`      ↳ [${item.date}] ${item.description}`, val, "Obligación Bancaria"]);
+      bankRows.push([
+        `      ↳ [${item.date}] ${item.description}`, 
+        val, 
+        "Obligación Bancaria",
+        item.createdBy || "Sistema" // <--- AUDITORÍA
+      ]);
     });
   }
 
-  // D. CALCULO PROVEEDORES (NUEVO - COMBINADO)
+  // D. CALCULO PROVEEDORES (Con Responsable)
   let totalProviders = 0;
   const providerRows: (string | number)[][] = [];
 
@@ -116,7 +144,12 @@ export const generateMonthlyReport = (state: AppState) => {
     fixedExpenses.providersOccasional.forEach(item => {
       const val = Number(item.amount) || 0;
       totalProviders += val;
-      providerRows.push([`      ↳ [${item.date}] Ambulante: ${item.description}`, val, "Proveedor Ocasional"]);
+      providerRows.push([
+        `      ↳ [${item.date}] Ambulante: ${item.description}`, 
+        val, 
+        "Proveedor Ocasional",
+        item.createdBy || "Sistema" // <--- AUDITORÍA
+      ]);
     });
   }
 
@@ -125,7 +158,12 @@ export const generateMonthlyReport = (state: AppState) => {
     fixedExpenses.providersFormal.forEach(item => {
       const val = Number(item.amount) || 0;
       totalProviders += val;
-      providerRows.push([`      ↳ [${item.date}] ${item.company} (Fact: ${item.invoiceNumber})`, val, "Proveedor Formal"]);
+      providerRows.push([
+        `      ↳ [${item.date}] ${item.company} (Fact: ${item.invoiceNumber})`, 
+        val, 
+        "Proveedor Formal",
+        item.createdBy || "Sistema" // <--- AUDITORÍA
+      ]);
     });
   }
 
@@ -138,29 +176,27 @@ export const generateMonthlyReport = (state: AppState) => {
   
   const totalOperatingIncome = (totalSalesCash + totalSalesNequi);
   const netProfit = totalOperatingIncome - totalReturns - totalDailyExpenses - totalFixedExpenses;
-  const cashProfit = totalSalesCash - totalReturns - totalDailyExpenses; // Flujo de caja operativo simple
+  const cashProfit = totalSalesCash - totalReturns - totalDailyExpenses;
 
-  // CONSTRUCCIÓN TABLA RESUMEN
+  // CONSTRUCCIÓN TABLA RESUMEN (Ahora con 4 columnas)
   const summaryData: (string | number)[][] = [
     ["RESUMEN MENSUAL - DISTRICAUCHOS Y EMPAQUES DEL SUR"],
     [`Periodo: ${monthName} ${year}`],
     [],
-    ["CONCEPTO", "VALOR (COP)", "DETALLE"],
+    ["CONCEPTO", "VALOR (COP)", "DETALLE", "RESPONSABLE"], // <--- Header Modificado
     ["1. INGRESOS POR VENTAS"],
-    ["   (+) Ventas en Efectivo", totalSalesCash, "Recaudado en local"],
-    ["   (+) Ventas por Transferencia", totalSalesNequi, "Consignaciones Nequi/Otros"],
-    ["   TOTAL VENTAS BRUTAS", totalOperatingIncome, ""],
+    ["   (+) Ventas en Efectivo", totalSalesCash, "Recaudado en local", "Varios"],
+    ["   (+) Ventas por Transferencia", totalSalesNequi, "Consignaciones Nequi/Otros", "Varios"],
+    ["   TOTAL VENTAS BRUTAS", totalOperatingIncome, "", ""],
     [],
     ["2. EGRESOS OPERATIVOS (CAJA)"],
-    ["   (-) Devoluciones / Garantías", totalReturns, ""],
-    ["   (-) Gastos Diarios Menores", totalDailyExpenses, ""],
+    ["   (-) Devoluciones / Garantías", totalReturns, "", "Varios"],
+    ["   (-) Gastos Diarios Menores", totalDailyExpenses, "", "Varios"],
     [],
-    ["   (=) GANANCIA EN EFECTIVO", cashProfit, "Flujo de dinero físico del mes"],
+    ["   (=) GANANCIA EN EFECTIVO", cashProfit, "Flujo de dinero físico del mes", ""],
     [],
     ["3. GASTOS FIJOS DEL MES"],
   ];
-  
-  // Insertar filas dinámicas
   
   // Servicios
   summaryData.push(["   --- SERVICIOS PÚBLICOS ---", totalUtilities]);
@@ -170,7 +206,7 @@ export const generateMonthlyReport = (state: AppState) => {
   summaryData.push(["   --- NÓMINA ---", totalPayroll]);
   payrollRows.forEach(r => summaryData.push(r));
 
-  // Bancos (Nuevo Bloque)
+  // Bancos
   summaryData.push(["   --- OBLIGACIONES BANCARIAS ---", totalBanks]);
   if(bankRows.length > 0) {
       bankRows.forEach(r => summaryData.push(r));
@@ -178,7 +214,7 @@ export const generateMonthlyReport = (state: AppState) => {
       summaryData.push(["      (Sin registros)", 0]);
   }
 
-  // Proveedores (Nuevo Bloque)
+  // Proveedores
   summaryData.push(["   --- PROVEEDORES (Mercancía) ---", totalProviders]);
   if(providerRows.length > 0) {
       providerRows.forEach(r => summaryData.push(r));
@@ -186,10 +222,10 @@ export const generateMonthlyReport = (state: AppState) => {
       summaryData.push(["      (Sin registros)", 0]);
   }
 
-  // Otros Gastos Simples
+  // Otros Gastos
   summaryData.push(
-    ["   Arriendo Local", rentVal],
-    ["   Otros Gastos Varios", othersVal],
+    ["   Arriendo Local", rentVal, "Gasto Fijo", "Admin"],
+    ["   Otros Gastos Varios", othersVal, "Gasto Fijo", "Admin"],
     [],
     ["   TOTAL GASTOS FIJOS", totalFixedExpenses],
     [],
@@ -198,6 +234,15 @@ export const generateMonthlyReport = (state: AppState) => {
   );
 
   const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+  
+  // Ajuste final de anchos para el Resumen
+  wsSummary['!cols'] = [
+    { wch: 40 }, // Concepto
+    { wch: 15 }, // Valor
+    { wch: 25 }, // Detalle
+    { wch: 20 }  // Responsable
+  ];
+
   XLSX.utils.book_append_sheet(wb, wsSummary, "RESUMEN FINAL");
   XLSX.writeFile(wb, `Contabilidad_Districauchos_${monthName}_${year}.xlsx`);
 };
