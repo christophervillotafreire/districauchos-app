@@ -513,8 +513,7 @@ const App: React.FC = () => {
 
                   {!isAdmin ? (
                     <div className="py-4 text-center text-slate-400 text-sm">
-                      <LockClosedIcon className="h-8 w-8 mx-auto mb-2 opacity-30"/>
-                      <p>Resumen oculto para empleados</p>
+                      <p>Accede para ver el Resumen Diario</p>
                     </div>
                   ) : (
                     <>
