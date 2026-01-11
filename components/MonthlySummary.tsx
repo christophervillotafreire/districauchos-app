@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { MonthlyFixedExpenses, Employee, ServiceItem, SimpleExpenseItem, ProviderFormalItem } from '../types';
+// IMPORTANTE: Agregamos AppUser a los imports
+import { MonthlyFixedExpenses, Employee, ServiceItem, SimpleExpenseItem, ProviderFormalItem, AppUser } from '../types';
 import { 
   TrashIcon, CurrencyDollarIcon, UserGroupIcon, PlusIcon, BoltIcon, 
   BuildingLibraryIcon, TruckIcon, XMarkIcon, ShoppingBagIcon, CalendarDaysIcon, DocumentTextIcon,
-  BuildingStorefrontIcon, LockClosedIcon, GlobeAmericasIcon, HomeIcon
+  BuildingStorefrontIcon, LockClosedIcon, GlobeAmericasIcon, HomeIcon, UserIcon
 } from '@heroicons/react/24/outline';
 
-// Agregamos el "mode" a las propiedades
 type SummaryMode = 'admin' | 'public';
 
 interface MonthlySummaryProps {
@@ -16,7 +16,8 @@ interface MonthlySummaryProps {
   onBaseChange: (base: number) => void;
   dayCount: number;
   onReset: () => void;
-  mode: SummaryMode; // Nueva propiedad obligatoria
+  mode: SummaryMode;
+  activeUser: AppUser | null; // <--- NUEVA PROP REQUERIDA
 }
 
 const Modal = ({ title, onClose, children }: { title: string, onClose: () => void, children: React.ReactNode }) => (
@@ -35,7 +36,17 @@ const Modal = ({ title, onClose, children }: { title: string, onClose: () => voi
   </div>
 );
 
-export const MonthlySummary: React.FC<MonthlySummaryProps> = ({ expenses, defaultBase, onChange, onBaseChange, onReset, mode }) => {
+// Helper para mostrar la etiqueta de "Creado por"
+const CreatorBadge = ({ name }: { name?: string }) => {
+  if (!name) return null;
+  return (
+    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-500 border border-slate-200 whitespace-nowrap">
+      <UserIcon className="h-3 w-3" /> {name}
+    </span>
+  );
+};
+
+export const MonthlySummary: React.FC<MonthlySummaryProps> = ({ expenses, defaultBase, onChange, onBaseChange, onReset, mode, activeUser }) => {
   
   const [activeModal, setActiveModal] = useState<'NONE' | 'PROVIDERS' | 'BANKS'>('NONE');
   const [providerTab, setProviderTab] = useState<'OCCASIONAL' | 'FORMAL'>('OCCASIONAL');
@@ -49,24 +60,64 @@ export const MonthlySummary: React.FC<MonthlySummaryProps> = ({ expenses, defaul
     if (window.confirm("¿Borrar TODOS los datos del mes? Esta acción no se puede deshacer.")) onReset();
   };
 
-  // --- LOGICA DE AGREGAR/QUITAR (INTACTA) ---
+  // --- LOGICA DE AGREGAR/QUITAR CON TRAZABILIDAD ---
   const addEmployee = () => onChange({ ...expenses, payroll: [...(expenses.payroll||[]), { id: Date.now().toString(), name: '', paymentQ1: 0, paymentQ2: 0 }] });
   const updateEmployee = (id: string, field: keyof Employee, value: any) => onChange({ ...expenses, payroll: (expenses.payroll||[]).map(i => i.id === id ? { ...i, [field]: value } : i) });
   const removeEmployee = (id: string) => { if(confirm('¿Eliminar empleado?')) onChange({ ...expenses, payroll: (expenses.payroll||[]).filter(i => i.id !== id) }); };
   
-  const addService = () => onChange({ ...expenses, utilities: [...(expenses.utilities||[]), { id: Date.now().toString(), name: '', amount: 0 }] });
+  // AHORA INYECTAMOS createdBy EN SERVICIOS
+  const addService = () => onChange({ 
+    ...expenses, 
+    utilities: [...(expenses.utilities||[]), { 
+      id: Date.now().toString(), 
+      name: '', 
+      amount: 0,
+      createdBy: activeUser?.name // <--- FIRMA
+    }] 
+  });
   const updateService = (id: string, field: keyof ServiceItem, value: any) => onChange({ ...expenses, utilities: (expenses.utilities||[]).map(i => i.id === id ? { ...i, [field]: value } : i) });
   const removeService = (id: string) => { if(confirm('¿Eliminar servicio?')) onChange({ ...expenses, utilities: (expenses.utilities||[]).filter(i => i.id !== id) }); };
 
-  const addBankItem = () => onChange({ ...expenses, bankTransactions: [...(expenses.bankTransactions||[]), { id: Date.now().toString(), date: new Date().toISOString().split('T')[0], description: '', amount: 0 }] });
+  // AHORA INYECTAMOS createdBy EN BANCOS
+  const addBankItem = () => onChange({ 
+    ...expenses, 
+    bankTransactions: [...(expenses.bankTransactions||[]), { 
+      id: Date.now().toString(), 
+      date: new Date().toISOString().split('T')[0], 
+      description: '', 
+      amount: 0,
+      createdBy: activeUser?.name // <--- FIRMA
+    }] 
+  });
   const updateBankItem = (id: string, field: keyof SimpleExpenseItem, value: any) => onChange({ ...expenses, bankTransactions: (expenses.bankTransactions||[]).map(i => i.id === id ? { ...i, [field]: value } : i) });
   const removeBankItem = (id: string) => onChange({ ...expenses, bankTransactions: (expenses.bankTransactions||[]).filter(i => i.id !== id) });
 
-  const addOccasional = () => onChange({ ...expenses, providersOccasional: [...(expenses.providersOccasional||[]), { id: Date.now().toString(), date: new Date().toISOString().split('T')[0], description: '', amount: 0 }] });
+  // AHORA INYECTAMOS createdBy EN PROVEEDORES OCASIONALES
+  const addOccasional = () => onChange({ 
+    ...expenses, 
+    providersOccasional: [...(expenses.providersOccasional||[]), { 
+      id: Date.now().toString(), 
+      date: new Date().toISOString().split('T')[0], 
+      description: '', 
+      amount: 0,
+      createdBy: activeUser?.name // <--- FIRMA
+    }] 
+  });
   const updateOccasional = (id: string, field: keyof SimpleExpenseItem, value: any) => onChange({ ...expenses, providersOccasional: (expenses.providersOccasional||[]).map(i => i.id === id ? { ...i, [field]: value } : i) });
   const removeOccasional = (id: string) => onChange({ ...expenses, providersOccasional: (expenses.providersOccasional||[]).filter(i => i.id !== id) });
 
-  const addFormal = () => onChange({ ...expenses, providersFormal: [...(expenses.providersFormal||[]), { id: Date.now().toString(), date: new Date().toISOString().split('T')[0], company: '', invoiceNumber: '', amount: 0 }] });
+  // AHORA INYECTAMOS createdBy EN PROVEEDORES FORMALES
+  const addFormal = () => onChange({ 
+    ...expenses, 
+    providersFormal: [...(expenses.providersFormal||[]), { 
+      id: Date.now().toString(), 
+      date: new Date().toISOString().split('T')[0], 
+      company: '', 
+      invoiceNumber: '', 
+      amount: 0,
+      createdBy: activeUser?.name // <--- FIRMA
+    }] 
+  });
   const updateFormal = (id: string, field: keyof ProviderFormalItem, value: any) => onChange({ ...expenses, providersFormal: (expenses.providersFormal||[]).map(i => i.id === id ? { ...i, [field]: value } : i) });
   const removeFormal = (id: string) => onChange({ ...expenses, providersFormal: (expenses.providersFormal||[]).filter(i => i.id !== id) });
 
@@ -100,7 +151,7 @@ export const MonthlySummary: React.FC<MonthlySummaryProps> = ({ expenses, defaul
           {/* === PARTE PÚBLICA (ARRIENDO, SERVICIOS, BANCOS, PROVEEDORES) === */}
           {mode === 'public' && (
             <>
-              {/* 1. ARRIENDO (Movido aquí) */}
+              {/* 1. ARRIENDO */}
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 flex items-center gap-3">
                  <div className="bg-white p-2 rounded-lg shadow-sm text-slate-400"><HomeIcon className="h-5 w-5" /></div>
                  <div className="flex-1">
@@ -109,7 +160,7 @@ export const MonthlySummary: React.FC<MonthlySummaryProps> = ({ expenses, defaul
                  </div>
               </div>
 
-              {/* 2. SERVICIOS */}
+              {/* 2. SERVICIOS (CON ETIQUETA DE CREADOR) */}
               <div className="bg-cyan-50/50 p-4 rounded-2xl border border-cyan-100">
                 <div className="flex justify-between items-center mb-3">
                   <h4 className="text-xs font-black text-cyan-900 uppercase flex items-center gap-2"><BoltIcon className="h-4 w-4" /> Servicios ({totalUtils.toLocaleString()})</h4>
@@ -117,12 +168,18 @@ export const MonthlySummary: React.FC<MonthlySummaryProps> = ({ expenses, defaul
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2"> 
                   {(expenses.utilities||[]).map((item) => (
-                    <div key={item.id} className="bg-white p-2 rounded-xl border border-cyan-100 shadow-sm flex items-center gap-2 relative">
-                      <div className="flex-1 min-w-0">
-                          <input type="text" value={item.name} onChange={(e) => updateService(item.id, 'name', e.target.value)} placeholder="Nombre" className="w-full text-[10px] font-bold border-b border-transparent focus:border-cyan-200 outline-none text-slate-600 mb-0.5" />
-                          <input type="number" value={item.amount || ''} onChange={(e) => updateService(item.id, 'amount', parseFloat(e.target.value) || 0)} placeholder="$0" className="w-full text-xs font-black text-cyan-700 outline-none bg-transparent" />
+                    <div key={item.id} className="bg-white p-2 rounded-xl border border-cyan-100 shadow-sm flex flex-col gap-1 relative">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 min-w-0">
+                            <input type="text" value={item.name} onChange={(e) => updateService(item.id, 'name', e.target.value)} placeholder="Nombre" className="w-full text-[10px] font-bold border-b border-transparent focus:border-cyan-200 outline-none text-slate-600 mb-0.5" />
+                            <input type="number" value={item.amount || ''} onChange={(e) => updateService(item.id, 'amount', parseFloat(e.target.value) || 0)} placeholder="$0" className="w-full text-xs font-black text-cyan-700 outline-none bg-transparent" />
+                        </div>
+                        <button onClick={() => removeService(item.id)} className="text-red-300 hover:text-red-500 self-start"><TrashIcon className="h-4 w-4" /></button>
                       </div>
-                      <button onClick={() => removeService(item.id)} className="text-red-300 hover:text-red-500"><TrashIcon className="h-4 w-4" /></button>
+                      {/* ETIQUETA VISUAL */}
+                      <div className="flex justify-end">
+                        <CreatorBadge name={item.createdBy} />
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -185,7 +242,7 @@ export const MonthlySummary: React.FC<MonthlySummaryProps> = ({ expenses, defaul
         </div>
       </div>
 
-      {/* MODALES DE BANCOS Y PROVEEDORES (CÓDIGO IDÉNTICO AL ORIGINAL) */}
+      {/* MODALES DE BANCOS Y PROVEEDORES (CON BADGES DE CREADOR) */}
       {activeModal === 'BANKS' && (
         <Modal title="Gestionar Bancos" onClose={() => setActiveModal('NONE')}>
           <div className="space-y-4">
@@ -200,6 +257,9 @@ export const MonthlySummary: React.FC<MonthlySummaryProps> = ({ expenses, defaul
                     <div className="col-span-2"><label className="text-[9px] font-bold text-slate-400 uppercase">Descripción</label><input type="text" value={item.description} onChange={(e) => updateBankItem(item.id, 'description', e.target.value)} className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs font-bold text-slate-700" placeholder="Ej. Cuota Banco X" /></div>
                     <div><label className="text-[9px] font-bold text-slate-400 uppercase">Fecha</label><input type="date" value={item.date} onChange={(e) => updateBankItem(item.id, 'date', e.target.value)} className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs font-bold text-slate-700" /></div>
                     <div><label className="text-[9px] font-bold text-slate-400 uppercase">Monto</label><input type="number" value={item.amount || ''} onChange={(e) => updateBankItem(item.id, 'amount', parseFloat(e.target.value)||0)} className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs font-bold text-slate-700" placeholder="$0" /></div>
+                  </div>
+                  <div className="flex justify-end mt-1">
+                     <CreatorBadge name={item.createdBy} />
                   </div>
                 </div>
               ))}
@@ -228,6 +288,9 @@ export const MonthlySummary: React.FC<MonthlySummaryProps> = ({ expenses, defaul
                           <div><input type="date" value={item.date} onChange={(e) => updateOccasional(item.id, 'date', e.target.value)} className="w-full bg-white border border-orange-100 rounded p-1.5 text-xs font-bold text-slate-500" /></div>
                           <div><input type="number" value={item.amount || ''} onChange={(e) => updateOccasional(item.id, 'amount', parseFloat(e.target.value)||0)} className="w-full bg-white border border-orange-100 rounded p-1.5 text-xs font-bold text-orange-700" placeholder="$0" /></div>
                        </div>
+                       <div className="flex justify-end mt-1">
+                          <CreatorBadge name={item.createdBy} />
+                       </div>
                     </div>
                   ))}
                 </div>
@@ -245,6 +308,9 @@ export const MonthlySummary: React.FC<MonthlySummaryProps> = ({ expenses, defaul
                           <div><input type="text" value={item.invoiceNumber} onChange={(e) => updateFormal(item.id, 'invoiceNumber', e.target.value)} className="w-full bg-white border border-blue-100 rounded p-1.5 text-xs font-bold text-slate-500" placeholder="# Factura" /></div>
                           <div><input type="date" value={item.date} onChange={(e) => updateFormal(item.id, 'date', e.target.value)} className="w-full bg-white border border-blue-100 rounded p-1.5 text-xs font-bold text-slate-500" /></div>
                           <div className="col-span-2"><input type="number" value={item.amount || ''} onChange={(e) => updateFormal(item.id, 'amount', parseFloat(e.target.value)||0)} className="w-full bg-white border border-blue-100 rounded p-1.5 text-xs font-bold text-blue-700" placeholder="Monto ($)" /></div>
+                       </div>
+                       <div className="flex justify-end mt-1">
+                          <CreatorBadge name={item.createdBy} />
                        </div>
                     </div>
                   ))}
