@@ -4,7 +4,8 @@ import { DayEditor } from './components/DayEditor';
 import { MonthlySummary } from './components/MonthlySummary';
 import { parseNotebookPage, FileData } from './services/geminiService';
 import { generateMonthlyReport } from './services/excelService';
-import { AppState, INITIAL_FIXED_EXPENSES, DayData, Transaction, TransactionType } from './types';
+// IMPORTANTE: Asegúrate de que AppUser esté exportado en types.ts como lo definimos antes
+import { AppState, INITIAL_FIXED_EXPENSES, DayData, Transaction, TransactionType, AppUser } from './types';
 import { 
   ArrowUpTrayIcon, 
   CalendarIcon, 
@@ -16,7 +17,9 @@ import {
   CreditCardIcon, 
   CurrencyDollarIcon,
   UserCircleIcon,
-  LockClosedIcon
+  LockClosedIcon,
+  UsersIcon,
+  ArrowRightOnRectangleIcon
 } from '@heroicons/react/24/outline';
 
 // --- FIREBASE IMPORTS ---
@@ -24,12 +27,25 @@ import { auth, googleProvider, db } from './firebaseConfig';
 import { signInWithPopup, onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 
+// --- CONFIGURACIÓN DE USUARIOS (Hardcoded por seguridad local) ---
+const APP_USERS: AppUser[] = [
+  { id: 'admin_01', name: 'Administrador', pin: '1307', role: 'admin' },
+  { id: 'emp_01', name: 'Juan Vendedor', pin: '1111', role: 'employee' },
+  { id: 'emp_02', name: 'Maria Caja', pin: '2222', role: 'employee' },
+];
+
 const App: React.FC = () => {
 
-// --- ESTADO DE AUTENTICACIÓN ---
+  // --- ESTADO DE AUTENTICACIÓN (FIREBASE) ---
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [dataLoaded, setDataLoaded] = useState(false);
+
+  // --- NUEVO: ESTADO DE SESIÓN (EMPLEADO) ---
+  const [activeUser, setActiveUser] = useState<AppUser | null>(null);
+  const [selectedUserId, setSelectedUserId] = useState<string>('');
+  const [pinEntry, setPinEntry] = useState<string>('');
+  const [loginError, setLoginError] = useState<string>('');
 
   // --- ESTADO DE LA APP ---
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -37,23 +53,42 @@ const App: React.FC = () => {
   const [loadingMessage, setLoadingMessage] = useState<string>('');
   const [installPrompt, setInstallPrompt] = useState<any>(null);
 
-  // Estados corregidos (Asegúrate de copiar todo esto exacto)
   const [selectedDayNumber, setSelectedDayNumber] = useState<number>(new Date().getDate());
   const [hasManuallySelected, setHasManuallySelected] = useState<boolean>(false);
   const [editingDay, setEditingDay] = useState<DayData | null>(null);
   
-  // Estado para el PIN de administrador
+  // El estado isAdmin ahora se deriva del usuario activo, pero mantenemos el estado local para casos manuales si es necesario
   const [isAdmin, setIsAdmin] = useState(false); 
 
-  const handleAdminUnlock = () => {
-    const pin = prompt("Ingrese el PIN de Administrador:");
-    if (pin === "1307") {
+  // Actualizar privilegios cuando cambia el usuario activo
+  useEffect(() => {
+    if (activeUser?.role === 'admin') {
       setIsAdmin(true);
     } else {
-      alert("PIN Incorrecto");
+      setIsAdmin(false);
+    }
+  }, [activeUser]);
+
+  // Manejo de Login de Empleado
+  const handleEmployeeLogin = () => {
+    const targetUser = APP_USERS.find(u => u.id === selectedUserId);
+    if (targetUser && targetUser.pin === pinEntry) {
+      setActiveUser(targetUser);
+      setPinEntry('');
+      setLoginError('');
+      setLoading(false);
+    } else {
+      setLoginError('PIN Incorrecto');
     }
   };
-  
+
+  const handleEmployeeLogout = () => {
+    setActiveUser(null);
+    setSelectedUserId('');
+    setPinEntry('');
+    setIsAdmin(false);
+  };
+
   const today = new Date();
 
   // Estado inicial por defecto
@@ -67,9 +102,9 @@ const App: React.FC = () => {
 
   const [state, setState] = useState<AppState>(defaultState);
 
-// 1. ESCUCHAR EL ESTADO DEL USUARIO Y SINCRONIZAR EN TIEMPO REAL
+  // 1. ESCUCHAR EL ESTADO DEL USUARIO Y SINCRONIZAR EN TIEMPO REAL
   useEffect(() => {
-    let unsubscribeSnapshot: () => void; // Para detener la escucha al salir
+    let unsubscribeSnapshot: () => void; 
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
@@ -79,7 +114,6 @@ const App: React.FC = () => {
         setLoading(true);
         setLoadingMessage('Sincronizando equipo...');
         
-        // ACTIVAMOS LA ESCUCHA EN TIEMPO REAL (onSnapshot)
         const docRef = doc(db, "users", currentUser.uid);
         
         unsubscribeSnapshot = onSnapshot(docRef, (docSnap) => {
@@ -87,7 +121,6 @@ const App: React.FC = () => {
             const cloudData = docSnap.data();
             const cloudFixed = cloudData.fixedExpenses || {};
 
-            // Lógica de seguridad para arrays (igual que antes)
             const sanitizedFixedExpenses = {
               ...INITIAL_FIXED_EXPENSES,
               ...cloudFixed,
@@ -107,13 +140,10 @@ const App: React.FC = () => {
               fixedExpenses: sanitizedFixedExpenses
             };
 
-            // IMPORTANTE: Solo actualizamos si hay cambios para evitar bucles
-            // (React hará el diffing, así que setState es seguro aquí)
             setState(newState);
             setDataLoaded(true);
             setLoading(false);
           } else {
-            // Si es usuario nuevo
             setDoc(docRef, defaultState);
             setState(defaultState);
             setLoading(false);
@@ -135,8 +165,7 @@ const App: React.FC = () => {
     };
   }, []);
 
-  // 2. GUARDAR EN FIRESTORE CUANDO EL ESTADO CAMBIA
-  // Reemplaza al useEffect de localStorage
+  // 2. GUARDAR EN FIRESTORE
   useEffect(() => {
     const saveData = async () => {
       if (user && dataLoaded) {
@@ -148,17 +177,12 @@ const App: React.FC = () => {
         }
       }
     };
-
-    // Usamos un pequeño delay (debounce) para no saturar la base de datos si escribes rápido
-    const timer = setTimeout(() => {
-      saveData();
-    }, 1000);
-
+    const timer = setTimeout(() => { saveData(); }, 1000);
     return () => clearTimeout(timer);
   }, [state, user, dataLoaded]);
 
 
-  // --- FUNCIONES DE AUTH ---
+  // --- FUNCIONES DE AUTH FIREBASE ---
   const handleLogin = async () => {
     try {
       await signInWithPopup(auth, googleProvider);
@@ -169,11 +193,11 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
-    const confirm = window.confirm("¿Cerrar sesión? Los datos ya están guardados en la nube.");
+    const confirm = window.confirm("¿Cerrar sesión de Google? Esto desconectará la base de datos.");
     if(confirm) signOut(auth);
   };
 
-  // --- CALCULOS (TU LÓGICA ORIGINAL) ---
+  // --- CALCULOS ---
   const daysInMonth = new Date(state.currentYear, state.currentMonth + 1, 0).getDate();
   const monthName = new Intl.DateTimeFormat('es-CO', { month: 'long' }).format(new Date(state.currentYear, state.currentMonth)).toUpperCase();
 
@@ -208,6 +232,7 @@ const App: React.FC = () => {
 
   // --- HANDLERS ---
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    // Nota: Aquí se podría agregar createdBy a las transacciones de IA también, usando activeUser
     const files = event.target.files;
     if (!files || files.length === 0) return;
     setLoading(true);
@@ -221,9 +246,16 @@ const App: React.FC = () => {
       }));
       const filesData = await Promise.all(filePromises);
       const result = await parseNotebookPage(filesData);
+      
+      // INYECTAMOS LA FIRMA DEL USUARIO ACTIVO EN LA IA
       const extractedTransactions: Transaction[] = result.items.map((item: any) => ({
-        id: Math.random().toString(36).substr(2, 9), description: item.description, amount: Number(item.amount), type: item.type
+        id: Math.random().toString(36).substr(2, 9), 
+        description: item.description, 
+        amount: Number(item.amount), 
+        type: item.type,
+        createdBy: activeUser?.name // <-- FIRMA AUTOMÁTICA
       }));
+
       const targetDay = hasManuallySelected ? selectedDayNumber : (result.dayEstimate || selectedDayNumber);
       const newDayData: DayData = { day: targetDay, hasData: true, transactions: extractedTransactions, initialCash: state.days[targetDay]?.initialCash ?? state.defaultInitialCash };
       setEditingDay(newDayData);
@@ -243,12 +275,12 @@ const App: React.FC = () => {
   const monthlyCashProfit = monthlyStats.cashSales - monthlyStats.returns - monthlyStats.expenses;
   const monthlyGrossProfit = (monthlyStats.cashSales + monthlyStats.nequiSales) - monthlyStats.returns - monthlyStats.expenses;
 
-  // --- RENDERIZADO CONDICIONAL (LOGIN vs APP) ---
-
+  // --- RENDERIZADO 1: CARGANDO AUTH ---
   if (authLoading) {
     return <div className="h-screen flex items-center justify-center bg-slate-50 text-slate-400">Cargando aplicación...</div>;
   }
 
+  // --- RENDERIZADO 2: LOGIN GOOGLE (TIENDA) ---
   if (!user) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 p-6 text-center">
@@ -257,18 +289,8 @@ const App: React.FC = () => {
             <ScaleIcon className="h-8 w-8" />
           </div>
           <h1 className="text-2xl font-black text-slate-800">Districauchos App</h1>
-          <p className="text-slate-500 text-sm">Inicia sesión para acceder a tus registros financieros de forma segura y sincronizada.</p>
-          
-          <button 
-            onClick={handleLogin}
-            className="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-xl hover:bg-blue-700 transition-colors flex items-center justify-center gap-3"
-          >
-            <svg className="w-5 h-5" viewBox="0 0 24 24">
-                <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.24.81-.6z" />
-                <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-            </svg>
+          <p className="text-slate-500 text-sm">Acceso a Base de Datos en Nube.</p>
+          <button onClick={handleLogin} className="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-xl hover:bg-blue-700 transition-colors flex items-center justify-center gap-3">
             Entrar con Google
           </button>
         </div>
@@ -276,14 +298,93 @@ const App: React.FC = () => {
     );
   }
 
-  // --- APP PRINCIPAL (SOLO SI HAY USUARIO) ---
+  // --- RENDERIZADO 3: LOGIN PIN (EMPLEADO) ---
+  // Si ya cargó Firebase pero no hay usuario "activo" operando la caja
+  if (!activeUser) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-100 p-4">
+        <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm border-t-4 border-blue-600">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-xl font-bold text-slate-800">¿Quién eres?</h2>
+            <button onClick={handleLogout} className="text-xs text-red-400 hover:text-red-600 underline">Salir de Google</button>
+          </div>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-bold text-slate-600 mb-2">Selecciona tu Usuario</label>
+              <div className="grid grid-cols-1 gap-2">
+                {APP_USERS.map(u => (
+                  <button
+                    key={u.id}
+                    onClick={() => { setSelectedUserId(u.id); setLoginError(''); }}
+                    className={`p-3 rounded-lg flex items-center gap-3 border-2 transition-all text-left ${selectedUserId === u.id ? 'border-blue-500 bg-blue-50 text-blue-800' : 'border-slate-100 hover:border-slate-300'}`}
+                  >
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${u.role === 'admin' ? 'bg-purple-100 text-purple-600' : 'bg-green-100 text-green-600'}`}>
+                      {u.name.charAt(0)}
+                    </div>
+                    <span className="font-bold">{u.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {selectedUserId && (
+              <div className="animate-in fade-in slide-in-from-top-2">
+                <label className="block text-sm font-bold text-slate-600 mb-2">Ingresa tu PIN (4 dígitos)</label>
+                <input 
+                  type="password" 
+                  inputMode="numeric"
+                  maxLength={4}
+                  value={pinEntry}
+                  onChange={(e) => setPinEntry(e.target.value)}
+                  className="w-full text-center text-3xl tracking-[1em] font-black p-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 outline-none"
+                  placeholder="••••"
+                  autoFocus
+                />
+                {loginError && <p className="text-red-500 text-xs font-bold mt-2 text-center">{loginError}</p>}
+                
+                <button 
+                  onClick={handleEmployeeLogin}
+                  disabled={pinEntry.length < 4}
+                  className="w-full mt-4 bg-blue-600 disabled:bg-slate-300 text-white font-bold py-3 rounded-xl hover:bg-blue-700 active:scale-95 transition-all"
+                >
+                  INGRESAR A CAJA
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+        <p className="mt-8 text-slate-400 text-xs text-center max-w-xs">
+          Esta capa de seguridad asegura que cada movimiento quede registrado a tu nombre para la auditoría contable.
+        </p>
+      </div>
+    );
+  }
+
+  // --- RENDERIZADO 4: APP PRINCIPAL ---
   return (
     <div className="min-h-screen pb-44 bg-slate-50 font-sans xl:text-xl">
-      {/* Modificación en Header para Logout */}
       <Header
         onInstall={installPrompt ? () => installPrompt.prompt() : undefined}
-        onLogout={handleLogout}
+        onLogout={handleLogout} // Esto cierra sesión de Google
       />
+
+      {/* BARRA DE USUARIO ACTIVO */}
+      <div className="bg-slate-800 text-white px-4 py-2 flex justify-between items-center text-xs lg:text-sm">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center font-bold text-slate-900">
+            {activeUser.name.charAt(0)}
+          </div>
+          <span>Operando como: <span className="font-bold text-green-400">{activeUser.name}</span></span>
+        </div>
+        <button 
+          onClick={handleEmployeeLogout} 
+          className="flex items-center gap-1 hover:text-red-300 transition-colors"
+        >
+          <ArrowRightOnRectangleIcon className="h-4 w-4"/>
+          <span className="hidden sm:inline">Cambiar Usuario</span>
+        </button>
+      </div>
 
       <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept="image/*,application/pdf" multiple className="hidden" />
 
@@ -295,28 +396,32 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {editingDay && <DayEditor dayData={editingDay} defaultBase={state.defaultInitialCash} onSave={saveDayData} onCancel={() => setEditingDay(null)} />}
+      {/* Pasamos activeUser al editor */}
+      {editingDay && (
+        <DayEditor 
+          dayData={editingDay} 
+          defaultBase={state.defaultInitialCash} 
+          activeUser={activeUser} // <--- PROPS NUEVA
+          onSave={saveDayData} 
+          onCancel={() => setEditingDay(null)} 
+        />
+      )}
 
       <main className="container mx-auto max-w-7xl p-4 lg:p-8 space-y-6">
         
-        {/* SECCIÓN 1: Tarjetas y Panel Admin */}
+        {/* SECCIÓN 1: Tarjetas y Panel Admin (Simplificado) */}
         {!isAdmin ? (
-          <div className="bg-slate-900 p-6 rounded-3xl shadow-xl flex flex-col md:flex-row items-center justify-between gap-4 text-white">
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 flex flex-col md:flex-row items-center justify-between gap-4 text-slate-600">
             <div className="flex items-center gap-4">
-               <div className="p-3 bg-slate-800 rounded-2xl">
-                 <LockClosedIcon className="h-8 w-8 text-blue-400" />
+               <div className="p-3 bg-slate-100 rounded-2xl">
+                 <LockClosedIcon className="h-8 w-8 text-slate-400" />
                </div>
                <div>
-                 <h3 className="font-bold text-lg">Información Financiera Protegida</h3>
-                 <p className="text-slate-400 text-sm">Las ganancias y reportes son visibles solo para el administrador.</p>
+                 <h3 className="font-bold text-lg text-slate-800">Vista de Empleado</h3>
+                 <p className="text-slate-400 text-sm">Resumen financiero oculto. Solo puedes registrar operaciones.</p>
                </div>
             </div>
-            <button 
-              onClick={handleAdminUnlock}
-              className="px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold text-sm uppercase transition-colors"
-            >
-              Ingresar PIN
-            </button>
+            {/* Ya no hay botón de PIN manual, se debe cambiar de usuario */}
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 animate-in fade-in slide-in-from-top-4 duration-500">
@@ -392,40 +497,43 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="p-5 space-y-4">
-                  <div className="grid grid-cols-2 gap-4 pb-4 border-b border-slate-100">
-                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                        <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">Efec. Ventas</p>
-                        <p className="text-lg font-bold text-slate-800">{formatCurrency(dayStats.cashSales)}</p>
-                      </div>
-                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                        <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">Transferencia</p>
-                        <p className="text-lg font-bold text-purple-600">{formatCurrency(dayStats.nequiSales)}</p>
-                      </div>
-                  </div>
+                  {isAdmin && (
+                    <div className="grid grid-cols-2 gap-4 pb-4 border-b border-slate-100">
+                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                          <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">Efec. Ventas</p>
+                          <p className="text-lg font-bold text-slate-800">{formatCurrency(dayStats.cashSales)}</p>
+                        </div>
+                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                          <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">Transferencia</p>
+                          <p className="text-lg font-bold text-purple-600">{formatCurrency(dayStats.nequiSales)}</p>
+                        </div>
+                    </div>
+                  )}
 
-                  <div className="flex justify-between items-center bg-green-50 p-4 rounded-2xl border border-green-100">
-                    <div>
-                      <span className="block text-[10px] text-green-700 font-black uppercase tracking-widest">Saldo Físico en Caja</span>
-                      <span className="text-xs text-green-600 font-medium">Debe haber en la caja</span>
+                  {!isAdmin ? (
+                    <div className="py-4 text-center text-slate-400 text-sm">
+                      <LockClosedIcon className="h-8 w-8 mx-auto mb-2 opacity-30"/>
+                      <p>Resumen oculto para empleados</p>
                     </div>
-                    <span className="text-xl font-black text-green-700">{formatCurrency(dayNetCaja)}</span>
-                  </div>
-                  
-                  <div className="flex justify-between items-center bg-indigo-50 p-4 rounded-2xl border border-indigo-100">
-                    <div>
-                      <span className="block text-[10px] text-indigo-700 font-black uppercase tracking-widest">Efectivo Neto del Día</span>
-                      <span className="text-xs text-indigo-600 font-medium">(Ventas Efec. - Egresos) sin base</span>
+                  ) : (
+                    <>
+                    <div className="flex justify-between items-center bg-green-50 p-4 rounded-2xl border border-green-100">
+                        <div>
+                        <span className="block text-[10px] text-green-700 font-black uppercase tracking-widest">Saldo Físico en Caja</span>
+                        <span className="text-xs text-green-600 font-medium">Debe haber en la caja</span>
+                        </div>
+                        <span className="text-xl font-black text-green-700">{formatCurrency(dayNetCaja)}</span>
                     </div>
-                    <span className="text-xl font-black text-indigo-600">{formatCurrency(dayNetCashGenerated)}</span>
-                  </div>
-                  
-                  <div className="flex justify-between items-center bg-blue-50 p-4 rounded-2xl border border-blue-100">
-                    <div>
-                      <span className="block text-[10px] text-blue-700 font-black uppercase tracking-widest">Utilidad Real del Día</span>
-                      <span className="text-xs text-blue-600 font-medium">Ganancia neta</span>
+                    
+                    <div className="flex justify-between items-center bg-indigo-50 p-4 rounded-2xl border border-indigo-100">
+                        <div>
+                        <span className="block text-[10px] text-indigo-700 font-black uppercase tracking-widest">Efectivo Neto del Día</span>
+                        <span className="text-xs text-indigo-600 font-medium">(Ventas Efec. - Egresos) sin base</span>
+                        </div>
+                        <span className="text-xl font-black text-indigo-600">{formatCurrency(dayNetCashGenerated)}</span>
                     </div>
-                    <span className="text-xl font-black text-blue-700">{formatCurrency(dayTotalProfit)}</span>
-                  </div>
+                    </>
+                  )}
                 </div>
               </div>
             )}
@@ -433,10 +541,12 @@ const App: React.FC = () => {
           </div>
         </div>
         
-{/* --- SECCION PÚBLICA (ARRIENDO, SERVICIOS, BANCOS, PROVEEDORES) --- */}
+        {/* --- SECCION PÚBLICA (ARRIENDO, SERVICIOS, BANCOS, PROVEEDORES) --- */}
         <div className="w-full mt-8 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-150">
+           {/* Pasamos activeUser al MonthlySummary */}
            <MonthlySummary 
               mode="public" 
+              activeUser={activeUser} // <--- PROPS NUEVA
               expenses={state.fixedExpenses} 
               defaultBase={state.defaultInitialCash} 
               onChange={(ex) => setState(p => ({...p, fixedExpenses: ex}))} 
@@ -451,6 +561,7 @@ const App: React.FC = () => {
           {isAdmin ? (
             <MonthlySummary 
               mode="admin" 
+              activeUser={activeUser} // <--- PROPS NUEVA
               expenses={state.fixedExpenses} 
               defaultBase={state.defaultInitialCash} 
               onChange={(ex) => setState(p => ({...p, fixedExpenses: ex}))} 
@@ -475,7 +586,7 @@ const App: React.FC = () => {
                  <LockClosedIcon className="h-6 w-6 text-slate-400" />
                </div>
                <p className="text-slate-500 font-bold text-sm">Configuración Avanzada y Nómina Protegida.</p>
-               <p className="text-slate-400 text-xs mt-1">Ingresa el PIN de administrador arriba para ver salarios y otros gastos.</p>
+               <p className="text-slate-400 text-xs mt-1">Solo visible para el Administrador.</p>
             </div>
           )}
         </div>
