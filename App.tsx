@@ -433,11 +433,24 @@ const App: React.FC = () => {
           </div>
         </div>
         
-{/* SECCIÓN: Cierre de Mes (Protegido con PIN) */}
+{/* --- SECCION PÚBLICA (ARRIENDO, SERVICIOS, BANCOS, PROVEEDORES) --- */}
+        <div className="w-full mt-8 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-150">
+           <MonthlySummary 
+              mode="public" 
+              expenses={state.fixedExpenses} 
+              defaultBase={state.defaultInitialCash} 
+              onChange={(ex) => setState(p => ({...p, fixedExpenses: ex}))} 
+              onBaseChange={(base) => setState(p => ({...p, defaultInitialCash: base}))} 
+              dayCount={Object.keys(state.days).length} 
+              onReset={() => {}} 
+            />
+        </div>
+
+        {/* --- SECCION ADMIN (NÓMINA Y OTROS GASTOS) --- */}
         <div className="w-full mt-6">
           {isAdmin ? (
-            /* SI ES ADMIN: Muestra el componente completo */
             <MonthlySummary 
+              mode="admin" 
               expenses={state.fixedExpenses} 
               defaultBase={state.defaultInitialCash} 
               onChange={(ex) => setState(p => ({...p, fixedExpenses: ex}))} 
@@ -457,13 +470,12 @@ const App: React.FC = () => {
               }} 
             />
           ) : (
-            /* SI NO ES ADMIN: Muestra aviso de bloqueo */
-            <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl p-8 text-center animate-in fade-in">
+            <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl p-8 text-center animate-in fade-in opacity-50 hover:opacity-100 transition-opacity">
                <div className="inline-flex bg-slate-200 p-3 rounded-full mb-3">
                  <LockClosedIcon className="h-6 w-6 text-slate-400" />
                </div>
-               <p className="text-slate-500 font-bold text-sm">El panel de Gastos Fijos y Proveedores está protegido.</p>
-               <p className="text-slate-400 text-xs mt-1">Ingresa el PIN de administrador arriba para desbloquear.</p>
+               <p className="text-slate-500 font-bold text-sm">Configuración Avanzada y Nómina Protegida.</p>
+               <p className="text-slate-400 text-xs mt-1">Ingresa el PIN de administrador arriba para ver salarios y otros gastos.</p>
             </div>
           )}
         </div>
